@@ -92,3 +92,4 @@ inline float S(float px) { return px * Scale(); }
 #define ICON_LOADER         "\uE10A"
 #define ICON_FILE_IMAGE     "\uE31C"
 #define ICON_TRASH          "\uE18E"
+#define ICON_SLIDERS        "\uE29A"

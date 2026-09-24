@@ -1,14 +1,17 @@
 // Iconger core tests. Plain asserts, no framework: returns non-zero on failure.
 // Everything runs in a temp folder; the real pinned folder is never touched.
 #include "app_paths.h"
+#include "icon_adjust.h"
 #include "icon_backup.h"
 #include "icon_utils.h"
+#include "online_icons.h"
 #include "shell_link.h"
 #include <windows.h>
 #include <shlobj.h>
 #include <shellapi.h>
 #include <wrl/client.h>
 #include <cstdio>
+#include <cstring>
 #include <stb_image_write.h>
 
 using Microsoft::WRL::ComPtr;
@@ -151,6 +154,136 @@ static void TestLeftoverDetection()
     CHECK(ReadShortcut(lnk, sc) && sc.displayName == L"Tool (beta)");
 }
 
+static void TestAdjust()
+{
+    Image img;
+    img.w = 2; img.h = 1;
+    img.rgba = { 255, 0, 0, 255,   40, 90, 200, 0 }; // red, plus a fully transparent pixel
+
+    IconAdjust none;
+    CHECK(none.IsIdentity());
+    Image same = img;
+    ApplyAdjust(same, none);
+    CHECK(same.rgba == img.rgba);
+
+    IconAdjust gray;
+    gray.saturation = 0;
+    Image g = img;
+    ApplyAdjust(g, gray);
+    CHECK(g.rgba[0] == g.rgba[1] && g.rgba[1] == g.rgba[2]);
+    CHECK(g.rgba[3] == 255);
+    CHECK(g.rgba[4] == 40 && g.rgba[7] == 0); // transparent pixels untouched
+
+    IconAdjust hue;
+    hue.hue = 120; // red -> green
+    Image h = img;
+    ApplyAdjust(h, hue);
+    CHECK(h.rgba[1] > 240 && h.rgba[0] < 15 && h.rgba[2] < 15);
+
+    IconAdjust bright;
+    bright.brightness = 100;
+    Image b = img;
+    ApplyAdjust(b, bright);
+    CHECK(b.rgba[0] == 255 && b.rgba[1] == 255 && b.rgba[2] == 255);
+
+    IconAdjust tint;
+    tint.tintAmount = 100;
+    tint.tintColor = 0xFFFF0000; // ABGR: pure blue
+    Image t = img;
+    ApplyAdjust(t, tint);
+    CHECK(t.rgba[2] > t.rgba[0] && t.rgba[2] > t.rgba[1]);
+
+    CHECK(hue.Key() != gray.Key() && none.Key() == IconAdjust().Key());
+}
+
+static void TestIconLibraries()
+{
+    auto dash = IconIndex::ParseDashboardTree(R"({"png":["obsidian.png","firefox.png","firefox-dark.png","notes.png"],"svg":["x.svg"]})");
+    CHECK(dash.size() == 4 && dash[0].name == "obsidian");
+    CHECK(dash[0].Url().find("/png/obsidian.png") != std::string::npos);
+
+    auto simple = IconIndex::ParseSimpleIcons(
+        R"([{"title":"Obsidian","slug":"obsidian","hex":"7C3AED"},{"title":"Visual Studio Code","slug":"visualstudiocode","hex":"007ACC","aliases":{"aka":["VS Code"]}}])");
+    CHECK(simple.size() == 2 && simple[0].brandRgb == 0x7C3AED);
+    CHECK(simple[1].aliases.size() == 1);
+
+    auto pap = IconIndex::ParseGitHubTree(
+        R"({"sha":"x","tree":[{"path":"obsidian.svg","mode":"100644"},{"path":"md.obsidian.Obsidian.svg","mode":"120000"},{"path":"readme.txt"}]})", IconLibrary::Papirus);
+    CHECK(pap.size() == 2);
+    CHECK(IconIndex::ParseDashboardTree("not json").empty());
+
+    IconIndex idx;
+    idx.AddForTests(dash);
+    idx.AddForTests(pap);
+    idx.AddForTests(simple);
+    auto hits = idx.Search({ "Obsidian", "Obsidian.exe" }, 10);
+    CHECK(hits.size() >= 3);
+    CHECK(!hits.empty() && NormalizeName(hits[0].name) == "obsidian");
+    bool hasSimple = false, hasPapirusAlias = false;
+    for (const auto& h : hits) {
+        hasSimple |= h.lib == IconLibrary::SimpleIcons;
+        hasPapirusAlias |= h.name == "md.obsidian.Obsidian";
+    }
+    CHECK(hasSimple && hasPapirusAlias);
+    CHECK(idx.Search({ "VS Code" }, 5).size() == 1);           // via alias
+    CHECK(idx.Search({ "Code" }, 5).size() >= 1);              // substring of visualstudiocode
+    CHECK(idx.Search({ "zzzz-nothing" }, 5).empty());
+    auto ff = idx.Search({ "firefox" }, 5);
+    CHECK(ff.size() == 2 && ff[0].name == "firefox");          // plain before -dark variant
+
+    Image svg;
+    CHECK(RenderSvg(R"(<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect x="0" y="0" width="10" height="10" fill="#ff0000"/></svg>)", 32, svg));
+    CHECK(svg.w == 32 && svg.rgba[(16 * 32 + 16) * 4] > 240 && svg.rgba[(16 * 32 + 16) * 4 + 3] == 255);
+    CHECK(!RenderSvg("<nope>", 32, svg));
+
+    Image tile = MakeBrandTile(R"(<svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/></svg>)", 0x7C3AED, 64);
+    CHECK(tile.w == 64 && tile.rgba[3] == 0);                                  // rounded corner is clear
+    const uint8_t* mid = &tile.rgba[(32 * 64 + 32) * 4];
+    CHECK(mid[0] > 240 && mid[1] > 240 && mid[2] > 240);                      // white glyph in the middle
+    const uint8_t* edge = &tile.rgba[(32 * 64 + 6) * 4];
+    CHECK(edge[0] == 0x7C && edge[1] == 0x3A && edge[2] == 0xED && edge[3] > 200); // brand colour on the rim
+}
+
+// Real downloads; opt-in so the default test run never needs the internet.
+static void TestIconLibrariesOnline()
+{
+    char v[8] = {};
+    if (!GetEnvironmentVariableA("ICONGER_NET_TESTS", v, sizeof(v)) || v[0] != '1') return;
+    IconIndex idx;
+    std::string err;
+    CHECK(idx.Load(err));
+    std::printf("online index: %zu icons %s\n", idx.Size(), err.c_str());
+    int libs[(int)IconLibrary::Count] = {};
+    std::vector<Image> sheet;
+    for (const char* app : { "Obsidian", "Firefox", "Discord", "Spotify" }) {
+        for (const auto& h : idx.Search({ app }, 40, 2)) {
+            ++libs[(int)h.lib];
+            Image img;
+            std::string e;
+            bool ok = FetchLibraryIcon(h, 64, img, e);
+            std::printf("  %-8s %-15s %-32s %s\n", app, LibraryName(h.lib), h.name.c_str(), ok ? "ok" : e.c_str());
+            CHECK(ok && img.w == 64 && HasOpaquePixel(img));
+            if (ok) sheet.push_back(img);
+        }
+    }
+    for (int l = 0; l < (int)IconLibrary::Count; ++l) CHECK(libs[l] > 0); // every library contributes
+
+    // contact sheet for eyeballing the renders: %TEMP%\iconger-online-sheet.png
+    if (!sheet.empty()) {
+        const int cols = 14, cell = 72;
+        const int rows = (int)(sheet.size() + cols - 1) / cols;
+        std::vector<uint8_t> px((size_t)cols * cell * rows * cell * 4, 0);
+        for (size_t k = 0; k < sheet.size(); ++k)
+            for (int y = 0; y < 64; ++y)
+                memcpy(&px[(((k / cols) * cell + 4 + y) * cols * cell + (k % cols) * cell + 4) * 4],
+                       &sheet[k].rgba[(size_t)y * 64 * 4], 64 * 4);
+        char tmp[MAX_PATH];
+        GetTempPathA(MAX_PATH, tmp);
+        stbi_write_png((std::string(tmp) + "iconger-online-sheet.png").c_str(), cols * cell, rows * cell, 4,
+                       px.data(), cols * cell * 4);
+    }
+}
+
 static void TestBackup()
 {
     IconBackup b;
@@ -190,6 +323,9 @@ int wmain()
     TestImportPngUnicodePath();
     TestShortcutIconRoundTrip();
     TestLeftoverDetection();
+    TestAdjust();
+    TestIconLibraries();
+    TestIconLibrariesOnline();
     TestBackup();
 
     // best-effort cleanup

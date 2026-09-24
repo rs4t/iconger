@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.20)
 #   MINOR  updates: new features, changes, semi-big stuff
 #   PATCH  small updates and fixes
 # Release tags are "v" + this, e.g. v0.2.1. The app shows a BETA badge while MAJOR is 0.
-project(iconger VERSION 0.2.3 LANGUAGES CXX RC)
+project(iconger VERSION 0.3.0 LANGUAGES CXX RC)
 set(ICONGER_VERSION_LABEL "${PROJECT_VERSION}")
 
 set(CMAKE_CXX_STANDARD 17)
@@ -33,6 +33,24 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(stb)
 
+# nanosvg - renders SVG icons from the online libraries (zlib license)
+FetchContent_Declare(
+    nanosvg
+    GIT_REPOSITORY  https://github.com/memononen/nanosvg.git
+    GIT_TAG         239e102ec2c691f2902e20ace2ed36ee4a35cfe6
+    SOURCE_SUBDIR   headers-only # no such folder: download, but don't build its CMake project
+)
+FetchContent_MakeAvailable(nanosvg)
+
+# nlohmann/json - parses the icon library indexes (MIT)
+FetchContent_Declare(
+    json
+    URL             https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
+    URL_HASH        SHA256=d6c65aca6b1ed68e7a182f4757257b107ae403032760ed6ef121c9d55e81757d
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
+FetchContent_MakeAvailable(json)
+
 # Lucide icon font (ISC license), embedded into the exe as a resource
 set(LUCIDE_VERSION 1.48.0)
 set(LUCIDE_TTF ${CMAKE_BINARY_DIR}/lucide-${LUCIDE_VERSION}.ttf)
@@ -53,13 +71,17 @@ add_library(iconger_core STATIC
     src/shell_link.cpp
     src/icon_backup.cpp
     src/icon_utils.cpp
+    src/icon_adjust.cpp
+    src/online_icons.cpp
     src/explorer_refresh.cpp
     src/settings.cpp
     src/stb_impl.cpp
 )
-target_include_directories(iconger_core PUBLIC src ${stb_SOURCE_DIR})
+target_include_directories(iconger_core PUBLIC src ${stb_SOURCE_DIR} ${nanosvg_SOURCE_DIR}/src)
 target_compile_definitions(iconger_core PUBLIC UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
-target_link_libraries(iconger_core PUBLIC ole32 oleaut32 shell32 shlwapi user32 gdi32 rstrtmgr)
+target_compile_definitions(iconger_core PRIVATE "ICONGER_CORE_VERSION=L\"${ICONGER_VERSION_LABEL}\"")
+target_link_libraries(iconger_core PUBLIC ole32 oleaut32 shell32 shlwapi user32 gdi32 rstrtmgr winhttp
+    nlohmann_json::nlohmann_json)
 
 # -------------------------------------------------------------------
 # Executable

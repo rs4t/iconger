@@ -18,10 +18,12 @@ void Settings::Load()
 {
     clearIconCache    = ReadBool(L"clearIconCache", clearIconCache);
     confirmRestart    = ReadBool(L"confirmRestart", confirmRestart);
+    onlineLibraries   = ReadBool(L"onlineLibraries", onlineLibraries);
 }
 
 void Settings::Save() const
 {
     WriteBool(L"clearIconCache", clearIconCache);
     WriteBool(L"confirmRestart", confirmRestart);
+    WriteBool(L"onlineLibraries", onlineLibraries);
 }

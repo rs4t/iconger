@@ -37,6 +37,16 @@ bool Toggle(const char* id, bool* value);
 /// Setting row: title/description on the left, toggle on the right.
 bool SettingRow(const char* title, const char* description, bool* value);
 
+enum class SliderTrack { Plain, Hue };
+
+/// Labelled slider: name + value on one line, track below. Snaps to and
+/// double-click resets to `def`. Values are whole numbers. Returns true when changed.
+bool Slider(const char* label, float* v, float vmin, float vmax, float def, const char* fmt,
+            SliderTrack track = SliderTrack::Plain);
+
+/// Round colour swatch; returns true when clicked.
+bool Swatch(const char* id, ImU32 color, bool selected, float size);
+
 /// Text clipped with an ellipsis to maxWidth.
 void TextEllipsis(const char* text, float maxWidth, ImU32 color);
 

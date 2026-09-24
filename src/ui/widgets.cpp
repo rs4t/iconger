@@ -3,6 +3,7 @@
 #include <imgui_internal.h>
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <vector>
 
 using namespace theme;
@@ -234,6 +235,83 @@ bool SettingRow(const char* title, const char* description, bool* value)
     ImGui::Dummy(ImVec2(0, 0)); // SetCursorPos alone doesn't extend the parent's bounds
     ImGui::PopID();
     return changed;
+}
+
+bool Slider(const char* label, float* v, float vmin, float vmax, float def, const char* fmt, SliderTrack track)
+{
+    ImGui::PushID(label);
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const float w = ImGui::GetContentRegionAvail().x;
+
+    // label ........ value
+    ImVec2 lp = ImGui::GetCursorScreenPos();
+    char value[32];
+    snprintf(value, sizeof(value), fmt, *v);
+    ImVec2 vs = ImGui::CalcTextSize(value);
+    bool isDefault = *v == def;
+    dl->AddText(lp, textSecondary, label);
+    dl->AddText(ImVec2(lp.x + w - vs.x, lp.y), isDefault ? textMuted : text, value);
+    ImGui::Dummy(ImVec2(w, ImGui::GetFontSize()));
+    ImGui::SetCursorPosY(ImGui::GetCursorPosY() - S(6));
+
+    // track
+    const float h = S(22), knob = S(8), th = S(6);
+    ImVec2 tp = ImGui::GetCursorScreenPos();
+    ImGui::InvisibleButton("##slider", ImVec2(w, h));
+    bool hovered = ImGui::IsItemHovered(), active = ImGui::IsItemActive();
+    const float x0 = tp.x + knob, x1 = tp.x + w - knob, cy = tp.y + h * 0.5f;
+    auto toX = [&](float val) { return x0 + (val - vmin) / (vmax - vmin) * (x1 - x0); };
+
+    bool changed = false;
+    if (hovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+        changed = *v != def;
+        *v = def;
+    } else if (active) {
+        float t = std::clamp((ImGui::GetIO().MousePos.x - x0) / (x1 - x0), 0.0f, 1.0f);
+        float nv = std::round(vmin + t * (vmax - vmin));
+        if (std::fabs(nv - def) <= (vmax - vmin) * 0.015f) nv = def; // sticky default
+        if (nv != *v) { *v = nv; changed = true; }
+    }
+    if (hovered || active) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+
+    if (track == SliderTrack::Hue) {
+        // rainbow: the knob shows how far colours rotate
+        const ImU32 stops[7] = { IM_COL32(255, 0, 0, 255), IM_COL32(255, 255, 0, 255), IM_COL32(0, 255, 0, 255),
+                                 IM_COL32(0, 255, 255, 255), IM_COL32(0, 0, 255, 255), IM_COL32(255, 0, 255, 255),
+                                 IM_COL32(255, 0, 0, 255) };
+        float seg = (x1 - x0) / 6;
+        for (int i = 0; i < 6; ++i)
+            dl->AddRectFilledMultiColor(ImVec2(x0 + seg * i, cy - th * 0.5f), ImVec2(x0 + seg * (i + 1), cy + th * 0.5f),
+                                        stops[i], stops[i + 1], stops[i + 1], stops[i]);
+        dl->AddCircleFilled(ImVec2(x0, cy), th * 0.5f, stops[0]);
+        dl->AddCircleFilled(ImVec2(x1, cy), th * 0.5f, stops[6]);
+    } else {
+        dl->AddRectFilled(ImVec2(x0 - th * 0.5f, cy - th * 0.5f), ImVec2(x1 + th * 0.5f, cy + th * 0.5f), accentBg, th);
+        float a = toX(def), b = toX(*v);
+        if (a != b) dl->AddRectFilled(ImVec2(std::min(a, b), cy - th * 0.5f), ImVec2(std::max(a, b), cy + th * 0.5f), primary, th);
+        dl->AddCircleFilled(ImVec2(a, cy), S(2), isDefault ? textMuted : primary); // tick at the default
+    }
+    float r = knob * (active ? 1.1f : hovered ? 1.05f : 1.0f);
+    dl->AddCircleFilled(ImVec2(toX(*v), cy + S(1)), r, IM_COL32(0, 0, 0, 90));
+    dl->AddCircleFilled(ImVec2(toX(*v), cy), r, IM_COL32_WHITE);
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal) && !active) ImGui::SetTooltip("Double-click to reset");
+    ImGui::PopID();
+    if (changed) KeepAnimating(0.2f);
+    return changed;
+}
+
+bool Swatch(const char* id, ImU32 color, bool selected, float size)
+{
+    ImVec2 p = ImGui::GetCursorScreenPos();
+    bool pressed = ImGui::InvisibleButton(id, ImVec2(size, size));
+    bool hovered = ImGui::IsItemHovered();
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImVec2 c(p.x + size * 0.5f, p.y + size * 0.5f);
+    if (selected) dl->AddCircle(c, size * 0.5f - S(1), text, 0, S(2));
+    else if (hovered) dl->AddCircle(c, size * 0.5f - S(1), borderStrong, 0, S(2));
+    dl->AddCircleFilled(c, size * 0.5f - S(4), color);
+    if (hovered) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+    return pressed;
 }
 
 void TextEllipsis(const char* str, float maxWidth, ImU32 color)

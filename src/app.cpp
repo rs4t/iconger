@@ -127,7 +127,10 @@ void App::Shutdown()
     m_entries.clear();
     m_editingPreview.Reset();
     m_cand = Candidate();
+    m_adjust = IconAdjust();
     m_grid.Clear();
+    m_online.clear();
+    ++m_onlineGen;
 }
 
 void App::SetDpiScale(float scale)
@@ -136,8 +139,14 @@ void App::SetDpiScale(float scale)
     // textures were extracted at pixel size for the old scale
     for (auto& e : m_entries) e.icon = LoadEntryIcon(e.sc, S(40));
     if (m_editing >= 0) m_editingPreview = LoadEntryIcon(m_entries[m_editing].sc, S(96));
-    if (m_cand) SetCandidate(m_cand.path, m_cand.index, m_cand.label);
+    if (m_cand) { // re-render at the new pixel sizes, keeping the adjustments
+        m_cand.base96 = CandidateImage((int)std::lround(S(96)));
+        m_cand.base24 = CandidateImage((int)std::lround(S(24)));
+        RefreshCandidatePreview();
+    }
     if (!m_grid.path.empty()) m_grid.Open(m_grid.path);
+    m_libQueryRan.clear(); // thumbnails too
+    RunLibrarySearch();
 }
 
 Texture App::LoadEntryIcon(const PinnedShortcut& sc, float px) const
@@ -184,7 +193,7 @@ bool App::IsCustomized(const Entry& e) const { return m_backup.Has(e.sc.lnkPath)
 
 bool App::IsBusy() const
 {
-    return m_restarting || m_grid.loaded < m_grid.count || ui::IsAnimating();
+    return m_restarting || m_grid.loaded < m_grid.count || ui::IsAnimating() || m_jobs.Busy();
 }
 
 // ============================================================================
@@ -196,11 +205,19 @@ void App::OpenEditor(int index)
     m_editing = index;
     m_editingPreview = LoadEntryIcon(m_entries[index].sc, S(96));
     m_cand = Candidate();
+    m_adjust = IconAdjust();
     m_fileLib.clear();
     m_grid.Clear();
-    // Start on the app's own icon set when it ships alternatives (Chrome, VS Code, ...)
     const auto& sc = m_entries[index].sc;
-    m_tab = !sc.targetPath.empty() && CountIcons(sc.targetPath) > 1 ? SourceTab::ThisApp : SourceTab::File;
+    // "This app" has the app's own icons plus library matches; without either, start on files
+    bool ownIcons = !sc.targetPath.empty() && CountIcons(sc.targetPath) > 1;
+    m_tab = ownIcons || m_settings.onlineLibraries ? SourceTab::ThisApp : SourceTab::File;
+    strncpy_s(m_libQuery, WideToUtf8(sc.displayName).c_str(), _TRUNCATE);
+    m_libQueryRan.clear();
+    m_online.clear();
+    ++m_onlineGen;
+    EnsureIndex();
+    RunLibrarySearch();
 }
 
 void App::CloseEditor()
@@ -208,7 +225,10 @@ void App::CloseEditor()
     m_editing = -1;
     m_editingPreview.Reset();
     m_cand = Candidate();
+    m_adjust = IconAdjust();
     m_grid.Clear();
+    m_online.clear();
+    ++m_onlineGen;
 }
 
 void App::SetCandidate(const std::wstring& path, int index, const std::string& label)
@@ -217,14 +237,66 @@ void App::SetCandidate(const std::wstring& path, int index, const std::string& l
     c.path = path;
     c.index = index;
     c.label = label;
-    Image img;
-    if (LoadIconImage(path, index, (int)std::lround(S(96)), img)) c.preview = Texture(img);
-    if (LoadIconImage(path, index, (int)std::lround(S(24)), img)) c.taskbar = Texture(img);
-    if (!c.preview) {
+    c.id = WideToUtf8(FileStem(path)) + "-" + std::to_string(index);
+    if (!LoadIconImage(path, index, (int)std::lround(S(96)), c.base96) ||
+        !LoadIconImage(path, index, (int)std::lround(S(24)), c.base24)) {
         ui::Toast(ui::ToastKind::Error, "Couldn't read an icon from that file.");
         return;
     }
     m_cand = std::move(c);
+    m_adjust = IconAdjust();
+    RefreshCandidatePreview();
+}
+
+void App::SetCandidatePixels(Image master, const std::string& id, const std::string& label)
+{
+    if (master.empty()) return;
+    Candidate c;
+    c.master = std::move(master);
+    c.id = id;
+    c.label = label;
+    c.base96 = MakeSquareResized(c.master, (int)std::lround(S(96)));
+    c.base24 = MakeSquareResized(c.master, (int)std::lround(S(24)));
+    m_cand = std::move(c);
+    m_adjust = IconAdjust();
+    RefreshCandidatePreview();
+}
+
+Image App::CandidateImage(int size) const
+{
+    Image img;
+    if (!m_cand.path.empty()) LoadIconImage(m_cand.path, m_cand.index, size, img);
+    else if (!m_cand.master.empty()) img = MakeSquareResized(m_cand.master, size);
+    return img;
+}
+
+void App::RefreshCandidatePreview()
+{
+    Image large = m_cand.base96, tiny = m_cand.base24;
+    ApplyAdjust(large, m_adjust);
+    ApplyAdjust(tiny, m_adjust);
+    m_cand.preview = Texture(large);
+    m_cand.taskbar = Texture(tiny);
+}
+
+void App::CustomizeCurrentIcon()
+{
+    if (m_editing < 0) return;
+    const PinnedShortcut& sc = m_entries[m_editing].sc;
+    std::wstring path;
+    int index = 0;
+    ResolveShortcutIcon(sc, path, index);
+    Image probe;
+    if (!path.empty() && LoadIconImage(path, index, 32, probe)) {
+        SetCandidate(path, index, "Current icon");
+        return;
+    }
+    // Store apps / shell items: no icon file, so work from the shell's rendering
+    Image shell;
+    if (LoadShellItemImage(sc.lnkPath, 256, shell))
+        SetCandidatePixels(std::move(shell), WideToUtf8(FileStem(sc.lnkPath)) + "-current", "Current icon");
+    else
+        ui::Toast(ui::ToastKind::Error, "Couldn't read the current icon.");
 }
 
 void App::HandlePickedFile(const std::wstring& path)
@@ -282,6 +354,27 @@ void App::ApplyCommandLine(int argc, wchar_t** argv)
                 HandlePickedFile(file);
             }
             ++i;
+        } else if (arg == L"--adjust" && m_cand) {
+            // "hue=40,saturation=140,brightness=-10,contrast=110,tint=50"
+            std::string spec = WideToUtf8(val);
+            for (size_t pos = 0; pos < spec.size();) {
+                size_t end = spec.find_first_of(", ", pos);
+                if (end == std::string::npos) end = spec.size();
+                std::string kv = spec.substr(pos, end - pos);
+                size_t eq = kv.find('=');
+                if (eq != std::string::npos) {
+                    std::string k = kv.substr(0, eq);
+                    float v = (float)atof(kv.c_str() + eq + 1);
+                    if (k == "hue") m_adjust.hue = std::clamp(v, -180.0f, 180.0f);
+                    else if (k == "saturation") m_adjust.saturation = std::clamp(v, 0.0f, 200.0f);
+                    else if (k == "brightness") m_adjust.brightness = std::clamp(v, -100.0f, 100.0f);
+                    else if (k == "contrast") m_adjust.contrast = std::clamp(v, 0.0f, 200.0f);
+                    else if (k == "tint") m_adjust.tintAmount = std::clamp(v, 0.0f, 100.0f);
+                }
+                pos = end + 1;
+            }
+            RefreshCandidatePreview();
+            ++i;
         }
     }
 }
@@ -327,7 +420,35 @@ void App::ApplyCandidate()
     Entry& e = m_entries[m_editing];
     IconBackupEntry original{ e.sc.iconPath, e.sc.iconIndex };
 
-    if (!SetShortcutIcon(e.sc.lnkPath, m_cand.path, m_cand.index)) {
+    // An untouched icon inside a file is referenced directly. Anything adjusted or
+    // downloaded becomes a multi-size .ico of its own in the Iconger icons folder.
+    std::wstring iconPath = m_cand.path;
+    int iconIndex = m_cand.index;
+    if (m_cand.path.empty() || !m_adjust.IsIdentity()) {
+        std::vector<Image> sizes;
+        for (int sz : { 256, 128, 64, 48, 32, 24, 16 }) {
+            Image img = CandidateImage(sz);
+            if (img.empty()) break;
+            ApplyAdjust(img, m_adjust);
+            sizes.push_back(std::move(img));
+        }
+        std::string key = m_cand.id + "|" + WideToUtf8(m_cand.path) + "|" + std::to_string(m_cand.index) + "|" + m_adjust.Key();
+        uint64_t h = 1469598103934665603ull;
+        for (unsigned char c : key) { h ^= c; h *= 1099511628211ull; }
+        std::wstring name = Utf8ToWide(m_cand.id);
+        for (auto& c : name)
+            if (wcschr(L"<>:\"/\\|?*#", c) || c < 32) c = L'_';
+        wchar_t hash[20];
+        swprintf_s(hash, L"%08llx", (unsigned long long)(h & 0xffffffffull));
+        iconPath = IconsDir() + L"\\" + name.substr(0, 40) + L"-" + hash + L".ico";
+        iconIndex = 0;
+        if (sizes.size() != 7 || !WriteIco(iconPath, sizes)) {
+            ui::Toast(ui::ToastKind::Error, "Couldn't create the icon file.");
+            return;
+        }
+    }
+
+    if (!SetShortcutIcon(e.sc.lnkPath, iconPath, iconIndex)) {
         ui::Toast(ui::ToastKind::Error, "Couldn't save " + U8(e.sc.displayName) + ". Is the shortcut read-only?");
         return;
     }
@@ -337,6 +458,7 @@ void App::ApplyCandidate()
 
     ReloadEntry(e);
     m_cand = Candidate();
+    m_adjust = IconAdjust();
     // SetShortcutIcon + this notification are enough for the taskbar to redraw;
     // restarting Explorer is only a manual fallback (Settings).
     SignalIconChange();
@@ -458,6 +580,8 @@ bool App::IconGrid::Pump(int budget, int size)
 void App::Frame()
 {
     PollRestart();
+    m_jobs.RunCompleted();
+    QueueThumbnails();
     HandleShortcuts();
 
     const ImGuiViewport* vp = ImGui::GetMainViewport();
@@ -793,6 +917,15 @@ void App::DrawPreviewCard()
     DrawTaskbarPreview(avail);
     ImGui::Dummy(ImVec2(0, S(4)));
 
+    if (m_cand) {
+        DrawAdjustPanel();
+    } else if (ui::Button("Customize current icon", ICON_SLIDERS, ui::ButtonKind::Secondary, ImVec2(-1, 0))) {
+        CustomizeCurrentIcon();
+    } else {
+        ui::Tooltip("Recolour the icon it has now: hue, saturation, brightness, contrast, tint");
+    }
+    ImGui::Dummy(ImVec2(0, S(4)));
+
     if (ui::Button("Apply icon", ICON_CHECK, ui::ButtonKind::Primary, ImVec2(-1, S(38)), (bool)m_cand))
         ApplyCandidate();
     ui::Tooltip(m_cand ? "Save this icon to the shortcut (Ctrl+S)" : "Choose an icon on the right first");
@@ -804,7 +937,10 @@ void App::DrawPreviewCard()
     bool usesOwnIcon = curIndex == 0 && _wcsicmp(curPath.c_str(), e.sc.targetPath.c_str()) == 0;
     bool canReset = customized || (!e.sc.iconPath.empty() && !usesOwnIcon);
     if (m_cand) {
-        if (ui::Button("Discard selection", ICON_X, ui::ButtonKind::Ghost, ImVec2(-1, 0))) m_cand = Candidate();
+        if (ui::Button("Discard selection", ICON_X, ui::ButtonKind::Ghost, ImVec2(-1, 0))) {
+            m_cand = Candidate();
+            m_adjust = IconAdjust();
+        }
     } else if (ui::Button(customized ? "Restore original icon" : "Use the app's own icon", ICON_UNDO,
                           ui::ButtonKind::Secondary, ImVec2(-1, 0), canReset)) {
         RestoreOriginal(e.sc.lnkPath);
@@ -832,6 +968,84 @@ void App::DrawPreviewCard()
     if (ui::Button("Show shortcut in Explorer", ICON_EXTERNAL, ui::ButtonKind::Secondary, ImVec2(-1, 0)))
         ShowInExplorer(e.sc.lnkPath);
     ui::EndCard();
+}
+
+void App::DrawAdjustPanel()
+{
+    ImGui::PushID("adjust");
+    float x0 = ImGui::GetCursorPosX(), w = ImGui::GetContentRegionAvail().x;
+    SectionLabel("ADJUST");
+    ImGui::SameLine(x0 + w - S(70));
+    ImGui::SetCursorPosY(ImGui::GetCursorPosY() - S(4));
+    bool changed = false;
+    if (ui::Button("Reset", nullptr, ui::ButtonKind::Ghost, ImVec2(S(70), S(26)), !m_adjust.IsIdentity())) {
+        m_adjust = IconAdjust();
+        changed = true;
+    }
+
+    // one-click looks; each is just a set of slider values
+    struct Preset { const char* name; float hue, sat, bright, contrast; };
+    const Preset presets[] = {
+        { "Mono",  0, 0, 0, 110 },
+        { "Vivid", 0, 150, 0, 112 },
+        { "Soft",  0, 60, 12, 88 },
+        { "Dark",  0, 90, -35, 115 },
+        { "Flip",  180, 100, 0, 100 },
+    };
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(S(9), S(4)));
+    ImGui::PushFont(nullptr, fontSmall);
+    for (int i = 0; i < (int)std::size(presets); ++i) {
+        const Preset& p = presets[i];
+        bool on = m_adjust.hue == p.hue && m_adjust.saturation == p.sat && m_adjust.brightness == p.bright &&
+                  m_adjust.contrast == p.contrast && m_adjust.tintAmount == 0;
+        if (i) ImGui::SameLine(0, S(6));
+        if (ui::Button(p.name, nullptr, on ? ui::ButtonKind::Outline : ui::ButtonKind::Secondary)) {
+            m_adjust = IconAdjust();
+            m_adjust.hue = p.hue; m_adjust.saturation = p.sat;
+            m_adjust.brightness = p.bright; m_adjust.contrast = p.contrast;
+            changed = true;
+        }
+    }
+    ImGui::PopFont();
+    ImGui::PopStyleVar();
+    ImGui::Dummy(ImVec2(0, S(2)));
+
+    changed |= ui::Slider("Hue", &m_adjust.hue, -180, 180, 0, "%+.0f°", ui::SliderTrack::Hue);
+    changed |= ui::Slider("Saturation", &m_adjust.saturation, 0, 200, 100, "%.0f%%");
+    changed |= ui::Slider("Brightness", &m_adjust.brightness, -100, 100, 0, "%+.0f");
+    changed |= ui::Slider("Contrast", &m_adjust.contrast, 0, 200, 100, "%.0f%%");
+    changed |= ui::Slider("Tint", &m_adjust.tintAmount, 0, 100, 0, "%.0f%%");
+
+    // tint colour: palette swatches + a custom picker
+    const ImU32 swatches[] = { primary, IM_COL32(239, 68, 68, 255), IM_COL32(236, 72, 153, 255), IM_COL32(167, 139, 250, 255),
+                               IM_COL32(59, 130, 246, 255), IM_COL32(34, 211, 238, 255), IM_COL32(76, 195, 138, 255),
+                               IM_COL32(250, 204, 21, 255), IM_COL32(240, 240, 240, 255) };
+    float sw = S(24);
+    for (int i = 0; i < (int)std::size(swatches); ++i) {
+        if (i) ImGui::SameLine(0, S(2));
+        ImGui::PushID(i);
+        if (ui::Swatch("##sw", swatches[i], m_adjust.tintAmount > 0 && m_adjust.tintColor == swatches[i], sw)) {
+            m_adjust.tintColor = swatches[i];
+            if (m_adjust.tintAmount == 0) m_adjust.tintAmount = 70; // picking a colour should visibly do something
+            changed = true;
+        }
+        ImGui::PopID();
+    }
+    ImGui::SameLine(0, S(6));
+    ImVec4 custom = ImGui::ColorConvertU32ToFloat4(m_adjust.tintColor);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, sw * 0.5f);
+    if (ImGui::ColorEdit3("##tint", &custom.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel |
+                                                ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_PickerHueWheel)) {
+        custom.w = 1;
+        m_adjust.tintColor = ImGui::ColorConvertFloat4ToU32(custom);
+        if (m_adjust.tintAmount == 0) m_adjust.tintAmount = 70;
+        changed = true;
+    }
+    ImGui::PopStyleVar();
+    ui::Tooltip("Custom tint colour");
+
+    if (changed) RefreshCandidatePreview();
+    ImGui::PopID();
 }
 
 void App::DrawTaskbarPreview(float width)
@@ -899,16 +1113,7 @@ void App::DrawSourceCard()
     std::wstring wantGrid;
     switch (m_tab) {
     case SourceTab::ThisApp:
-        if (!e.sc.targetPath.empty() && CountIcons(e.sc.targetPath) > 0) {
-            wantGrid = e.sc.targetPath;
-            ImGui::PushStyleColor(ImGuiCol_Text, textSecondary);
-            ImGui::TextUnformatted("Icons built into the app itself. Many apps ship alternatives.");
-            ImGui::PopStyleColor();
-        } else {
-            ImGui::PushStyleColor(ImGuiCol_Text, textSecondary);
-            ImGui::TextWrapped("This app has no icons of its own to choose from. Use your own image under \"From a file\".");
-            ImGui::PopStyleColor();
-        }
+        if (!e.sc.targetPath.empty() && CountIcons(e.sc.targetPath) > 0) wantGrid = e.sc.targetPath;
         break;
     case SourceTab::File: {
         // drop zone
@@ -949,9 +1154,229 @@ void App::DrawSourceCard()
 
     if (wantGrid.empty()) m_grid.Clear();
     else if (_wcsicmp(wantGrid.c_str(), m_grid.path.c_str()) != 0) m_grid.Open(wantGrid);
-    if (!m_grid.path.empty()) DrawIconGrid();
+    if (m_tab == SourceTab::ThisApp) DrawThisAppTab(ImGui::GetContentRegionAvail().y);
+    else if (!m_grid.path.empty()) DrawIconGrid();
     ui::EndCard();
 }
+
+// ============================================================================
+// "This app": built-in icons + online icon libraries
+// ============================================================================
+
+void App::EnsureIndex()
+{
+    if (!m_settings.onlineLibraries || m_index || m_indexLoading) return;
+    m_indexLoading = true;
+    m_indexError.clear();
+    m_jobs.Submit([this]() -> JobPool::Done {
+        auto index = std::make_shared<IconIndex>();
+        std::string err;
+        bool ok = index->Load(err);
+        return [this, index, ok, err] {
+            m_indexLoading = false;
+            if (ok) m_index = index;
+            else m_indexError = err;
+            m_libQueryRan.clear();
+            RunLibrarySearch();
+        };
+    });
+}
+
+void App::RunLibrarySearch()
+{
+    if (m_editing < 0 || !m_index || !m_settings.onlineLibraries) return;
+    std::string q = m_libQuery;
+    if (q == m_libQueryRan) return;
+    m_libQueryRan = q;
+
+    std::vector<std::string> queries = { q };
+    // for the default query also try the exe name ("Code.exe" for Visual Studio Code)
+    const PinnedShortcut& sc = m_entries[m_editing].sc;
+    if (q == U8(sc.displayName) && !sc.targetPath.empty()) queries.push_back(U8(FileStem(sc.targetPath)));
+
+    ++m_onlineGen; // results still downloading for the old query are dropped
+    m_thumbsInFlight = 0;
+    m_online.clear();
+    for (auto& hit : m_index->Search(queries, 36)) {
+        OnlineTile t;
+        t.icon = std::move(hit);
+        m_online.push_back(std::move(t));
+    }
+    QueueThumbnails();
+}
+
+void App::QueueThumbnails()
+{
+    // debounce typing in the search box
+    if (m_libEditTime >= 0 && ImGui::GetTime() - m_libEditTime > 0.35) {
+        m_libEditTime = -1;
+        RunLibrarySearch();
+    }
+    const int size = (int)std::lround(S(40));
+    for (size_t i = 0; i < m_online.size() && m_thumbsInFlight < 8; ++i) {
+        OnlineTile& t = m_online[i];
+        if (!t.loading || t.queued) continue;
+        t.queued = true;
+        ++m_thumbsInFlight;
+        m_jobs.Submit([this, gen = m_onlineGen, i, icon = t.icon, size]() -> JobPool::Done {
+            Image img;
+            std::string err;
+            bool ok = FetchLibraryIcon(icon, size, img, err);
+            return [this, gen, i, ok, img] {
+                if (gen != m_onlineGen || i >= m_online.size()) return;
+                --m_thumbsInFlight;
+                OnlineTile& tile = m_online[i];
+                tile.loading = false;
+                tile.failed = !ok;
+                if (!ok) return;
+                uint64_t h = 1469598103934665603ull;
+                for (uint8_t b : img.rgba) { h ^= b; h *= 1099511628211ull; }
+                tile.hash = h;
+                for (size_t k = 0; k < m_online.size(); ++k)
+                    if (k != i && !m_online[k].loading && m_online[k].hash == h && !m_online[k].duplicate)
+                        tile.duplicate = true;
+                if (!tile.duplicate) tile.tex = Texture(img);
+            };
+        });
+    }
+}
+
+int App::DrawTiles(const char* id, int count, const std::function<const Texture*(int)>& tex,
+                   const std::function<bool(int)>& selected, const std::function<bool(int)>& loading,
+                   const std::function<std::string(int)>& tooltip)
+{
+    float cell = S(56), gap = S(4), ic = S(32);
+    int cols = std::max(1, (int)((ImGui::GetContentRegionAvail().x + gap) / (cell + gap)));
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    int clicked = -1;
+    float pulse = 0.55f + 0.45f * std::sin((float)ImGui::GetTime() * 5.0f);
+    ImGui::PushID(id);
+    for (int i = 0; i < count; ++i) {
+        if (i % cols) ImGui::SameLine(0, gap);
+        ImGui::PushID(i);
+        ImVec2 p = ImGui::GetCursorScreenPos();
+        bool pressed = ImGui::InvisibleButton("##t", ImVec2(cell, cell));
+        bool hov = ImGui::IsItemHovered();
+        ImGui::PopID();
+        if (!ImGui::IsItemVisible()) continue;
+        ImVec2 q(p.x + cell, p.y + cell);
+        if (selected(i)) {
+            dl->AddRectFilled(p, q, primarySoft, S(8));
+            dl->AddRect(p, q, primary, S(8), S(1.5f));
+        } else if (hov) {
+            dl->AddRectFilled(p, q, cardHover, S(8));
+        }
+        ImVec2 ip(p.x + (cell - ic) * 0.5f, p.y + (cell - ic) * 0.5f);
+        const Texture* t = tex(i);
+        if (t && *t) {
+            dl->AddImage(t->Id(), ip, ImVec2(ip.x + ic, ip.y + ic));
+        } else if (loading(i)) {
+            ImVec4 c = ImGui::ColorConvertU32ToFloat4(accentBg);
+            c.w *= pulse;
+            dl->AddRectFilled(ip, ImVec2(ip.x + ic, ip.y + ic), ImGui::ColorConvertFloat4ToU32(c), S(8));
+            ui::KeepAnimating(0.1f);
+        } else {
+            ImVec2 xs = ImGui::CalcTextSize(ICON_X);
+            dl->AddText(ImVec2(p.x + (cell - xs.x) * 0.5f, p.y + (cell - xs.y) * 0.5f), textMuted, ICON_X);
+        }
+        if (hov) {
+            ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) ImGui::SetTooltip("%s", tooltip(i).c_str());
+        }
+        if (pressed && t && *t) clicked = i;
+    }
+    ImGui::PopID();
+    return clicked;
+}
+
+void App::DrawThisAppTab(float height)
+{
+    const PinnedShortcut& sc = m_entries[m_editing].sc;
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, bg);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(S(14), S(12)));
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, S(10));
+    ImGui::BeginChild("##thisapp", ImVec2(0, height), ImGuiChildFlags_AlwaysUseWindowPadding);
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor();
+
+    // 1) icons shipped inside the program
+    if (!m_grid.path.empty()) {
+        m_grid.Pump(24, (int)std::lround(S(32)));
+        std::string label = "BUILT INTO " + U8(sc.displayName);
+        for (auto& c : label) c = (char)toupper((unsigned char)c);
+        SectionLabel(label.c_str());
+        bool sameFile = m_cand && _wcsicmp(m_cand.path.c_str(), m_grid.path.c_str()) == 0;
+        int shown = std::min(m_grid.count, 240);
+        int hit = DrawTiles("builtin", shown,
+            [&](int i) -> const Texture* { return i < m_grid.loaded ? &m_grid.textures[i] : nullptr; },
+            [&](int i) { return sameFile && m_cand.index == i; },
+            [&](int i) { return i >= m_grid.loaded; },
+            [&](int i) { return "Icon #" + std::to_string(i) + " in " + U8(FileStem(m_grid.path) + LowerExt(m_grid.path)); });
+        if (hit >= 0) SetCandidate(m_grid.path, hit, U8(FileStem(m_grid.path)) + " #" + std::to_string(hit));
+        ImGui::Dummy(ImVec2(0, S(10)));
+    }
+
+    // 2) matches from the online libraries
+    SectionLabel("ICON LIBRARIES");
+    if (!m_settings.onlineLibraries) {
+        ImGui::PushStyleColor(ImGuiCol_Text, textSecondary);
+        ImGui::TextWrapped("Online icon libraries are turned off. You can turn them back on in Settings.");
+        ImGui::PopStyleColor();
+    } else {
+        ImGui::SetNextItemWidth(-1);
+        if (ImGui::InputTextWithHint("##libq", ICON_SEARCH "  Search thousands of app icons", m_libQuery, sizeof(m_libQuery)))
+            m_libEditTime = ImGui::GetTime();
+        ImGui::Dummy(ImVec2(0, S(2)));
+
+        if (m_indexLoading) {
+            ui::Spinner(S(18), primary);
+            ImGui::SameLine();
+            ImGui::PushStyleColor(ImGuiCol_Text, textSecondary);
+            ImGui::TextUnformatted("Loading icon libraries...");
+            ImGui::PopStyleColor();
+        } else if (!m_index) {
+            ImGui::PushStyleColor(ImGuiCol_Text, textSecondary);
+            ImGui::TextWrapped("Couldn't load the icon libraries (%s). Check your internet connection.", m_indexError.c_str());
+            ImGui::PopStyleColor();
+            if (ui::Button("Try again", ICON_REFRESH, ui::ButtonKind::Secondary)) EnsureIndex();
+        } else if (std::none_of(m_online.begin(), m_online.end(), [](const OnlineTile& t) { return t.loading || (!t.failed && !t.duplicate); })) {
+            ImGui::PushStyleColor(ImGuiCol_Text, textSecondary);
+            ImGui::TextWrapped("No icons match \"%s\". Try a shorter name, or a word like \"notes\" or \"music\".", m_libQuery);
+            ImGui::PopStyleColor();
+        } else {
+            std::vector<int> shown; // failed downloads and repeats of the same picture are hidden
+            for (int i = 0; i < (int)m_online.size(); ++i)
+                if (!m_online[i].failed && !m_online[i].duplicate) shown.push_back(i);
+            int hit = DrawTiles("online", (int)shown.size(),
+                [&](int k) -> const Texture* { return &m_online[shown[k]].tex; },
+                [&](int k) { return m_cand && m_cand.path.empty() && m_cand.id == m_online[shown[k]].icon.Id(); },
+                [&](int k) { return m_online[shown[k]].loading; },
+                [&](int k) {
+                    const LibraryIcon& ic = m_online[shown[k]].icon;
+                    return std::string(LibraryName(ic.lib)) + ": " + (ic.title.empty() ? ic.name : ic.title);
+                });
+            if (hit >= 0) {
+                // the file is cached by now, so a full-size render is quick
+                const LibraryIcon& ic = m_online[shown[hit]].icon;
+                Image master;
+                std::string err;
+                if (FetchLibraryIcon(ic, 256, master, err))
+                    SetCandidatePixels(std::move(master), ic.Id(), std::string(LibraryName(ic.lib)) + ": " + ic.name);
+                else
+                    ui::Toast(ui::ToastKind::Error, "Couldn't load that icon: " + err);
+            }
+        }
+        ImGui::Dummy(ImVec2(0, S(6)));
+        ImGui::PushFont(nullptr, fontSmall);
+        ImGui::PushStyleColor(ImGuiCol_Text, textMuted);
+        ImGui::TextWrapped("From Dashboard Icons (Apache-2.0), the WhiteSur, Fluent, Papirus, Tela and Candy icon "
+                           "themes (GPL-3.0) and Simple Icons (CC0). App logos belong to their owners.");
+        ImGui::PopStyleColor();
+        ImGui::PopFont();
+    }
+    ImGui::EndChild();
+}
+
 
 void App::DrawIconGrid()
 {
@@ -1124,6 +1549,40 @@ void App::DrawSettingsPage()
         "Deletes Windows' iconcache files during the restart. Fixes icons that refuse to update.", &m_settings.clearIconCache);
     ui::EndCard();
     if (changed) m_settings.Save();
+
+    ImGui::Spacing();
+    ui::BeginCard("##libraries", ImVec2(maxW, 0), 20);
+    ui::IconTile(ICON_SEARCH, success, successSoft, S(40));
+    ImGui::SameLine(0, S(14));
+    ImGui::BeginGroup();
+    ui::Heading("Icon libraries", "About 20,000 app icons in seven styles (Dashboard Icons, WhiteSur, Fluent, Papirus, "
+                                  "Tela, Candy, Simple Icons), searched by app name in \"This app\". Only the icons "
+                                  "you look at are downloaded, and they're cached.");
+    ImGui::EndGroup();
+    ImGui::Separator();
+    if (ui::SettingRow("Search online icon libraries",
+                       "Turn off to keep Iconger fully offline.", &m_settings.onlineLibraries)) {
+        m_settings.Save();
+        if (m_settings.onlineLibraries) EnsureIndex();
+    }
+    if (ui::Button("Clear downloaded icons", ICON_TRASH, ui::ButtonKind::Secondary)) {
+        // only the download cache; applied icons live in the icons folder and stay put
+        std::wstring dir = DataDir() + L"\\cache";
+        WIN32_FIND_DATAW ffd = {};
+        HANDLE h = FindFirstFileW((dir + L"\\*.bin").c_str(), &ffd);
+        int n = 0;
+        if (h != INVALID_HANDLE_VALUE) {
+            do { if (DeleteFileW((dir + L"\\" + ffd.cFileName).c_str())) ++n; } while (FindNextFileW(h, &ffd));
+            FindClose(h);
+        }
+        m_index.reset();
+        m_online.clear();
+        m_libQueryRan.clear();
+        ++m_onlineGen;
+        ui::Toast(ui::ToastKind::Success, "Cleared " + std::to_string(n) + " downloaded file(s).");
+    }
+    ui::Tooltip("Icons you already applied are kept.");
+    ui::EndCard();
 
     ImGui::Spacing();
     ui::BeginCard("##storage", ImVec2(maxW, 0), 20);
