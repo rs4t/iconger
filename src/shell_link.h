@@ -40,6 +40,16 @@ std::wstring AppDisplayName(const std::wstring& aumid);
 /// Created on first use unless `create` is false.
 std::wstring AppShortcutsFolder(bool create = true);
 
+/// Start menu > Programs > Iconger.lnk: what makes Iconger show up in Windows search.
+std::wstring StartMenuShortcutPath();
+
+/// Create or repair the Start menu shortcut so it launches `exe` (the copy that's running,
+/// which may have been moved since). Does nothing when it's already right.
+bool EnsureStartMenuShortcut(const std::wstring& exe);
+
+/// Delete the Start menu shortcut, if there is one.
+void RemoveStartMenuShortcut();
+
 /// Create a shortcut that launches the packaged app `aumid` with a custom icon. It carries
 /// the same AppUserModelID, so the running window groups with it on the taskbar.
 bool CreateAppShortcut(const std::wstring& lnkPath, const std::wstring& aumid,

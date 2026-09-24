@@ -75,12 +75,13 @@ add_library(iconger_core STATIC
     src/online_icons.cpp
     src/explorer_refresh.cpp
     src/settings.cpp
+    src/updater.cpp
     src/stb_impl.cpp
 )
 target_include_directories(iconger_core PUBLIC src ${stb_SOURCE_DIR} ${nanosvg_SOURCE_DIR}/src)
 target_compile_definitions(iconger_core PUBLIC UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
 target_compile_definitions(iconger_core PRIVATE "ICONGER_CORE_VERSION=L\"${ICONGER_VERSION_LABEL}\"")
-target_link_libraries(iconger_core PUBLIC ole32 oleaut32 shell32 shlwapi user32 gdi32 rstrtmgr winhttp propsys
+target_link_libraries(iconger_core PUBLIC ole32 oleaut32 shell32 shlwapi user32 gdi32 rstrtmgr winhttp propsys bcrypt
     nlohmann_json::nlohmann_json)
 
 # -------------------------------------------------------------------

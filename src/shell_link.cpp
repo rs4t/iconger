@@ -172,6 +172,36 @@ std::wstring AppShortcutsFolder(bool create)
     return dir;
 }
 
+std::wstring StartMenuShortcutPath()
+{
+    return AppShortcutsFolder(false) + L".lnk"; // ...\Programs\Iconger.lnk
+}
+
+bool EnsureStartMenuShortcut(const std::wstring& exe)
+{
+    std::wstring lnk = StartMenuShortcutPath();
+    PinnedShortcut current;
+    if (ReadShortcut(lnk, current) && _wcsicmp(current.targetPath.c_str(), exe.c_str()) == 0) return true;
+
+    ComPtr<IShellLinkW> link;
+    if (FAILED(CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&link)))) return false;
+    size_t slash = exe.find_last_of(L"\\/");
+    link->SetPath(exe.c_str());
+    if (slash != std::wstring::npos) link->SetWorkingDirectory(exe.substr(0, slash).c_str());
+    link->SetDescription(L"Change the icons of the apps pinned to your taskbar");
+    link->SetIconLocation(exe.c_str(), 0);
+    ComPtr<IPersistFile> file;
+    if (FAILED(link.As(&file)) || FAILED(file->Save(lnk.c_str(), TRUE))) return false;
+    SHChangeNotify(SHCNE_CREATE, SHCNF_PATHW, lnk.c_str(), nullptr);
+    return true;
+}
+
+void RemoveStartMenuShortcut()
+{
+    std::wstring lnk = StartMenuShortcutPath();
+    if (DeleteFileW(lnk.c_str())) SHChangeNotify(SHCNE_DELETE, SHCNF_PATHW, lnk.c_str(), nullptr);
+}
+
 bool CreateAppShortcut(const std::wstring& lnkPath, const std::wstring& aumid,
                        const std::wstring& iconPath, int iconIndex)
 {

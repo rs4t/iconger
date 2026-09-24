@@ -19,6 +19,12 @@ void Settings::Load()
     clearIconCache    = ReadBool(L"clearIconCache", clearIconCache);
     confirmRestart    = ReadBool(L"confirmRestart", confirmRestart);
     onlineLibraries   = ReadBool(L"onlineLibraries", onlineLibraries);
+    startMenuShortcut = ReadBool(L"startMenuShortcut", startMenuShortcut);
+    checkUpdates      = ReadBool(L"checkUpdates", checkUpdates);
+    // Versions before the welcome screen didn't write this; anyone with settings or
+    // backups from them has used Iconger already.
+    bool usedBefore = FileExists(SettingsFile()) || FileExists(DataDir() + L"\\backups.tsv");
+    welcomed          = ReadBool(L"welcomed", usedBefore);
 }
 
 void Settings::Save() const
@@ -26,4 +32,7 @@ void Settings::Save() const
     WriteBool(L"clearIconCache", clearIconCache);
     WriteBool(L"confirmRestart", confirmRestart);
     WriteBool(L"onlineLibraries", onlineLibraries);
+    WriteBool(L"startMenuShortcut", startMenuShortcut);
+    WriteBool(L"checkUpdates", checkUpdates);
+    WriteBool(L"welcomed", welcomed);
 }

@@ -6,6 +6,7 @@
 #include "icon_utils.h"
 #include "online_icons.h"
 #include "shell_link.h"
+#include "updater.h"
 #include <windows.h>
 #include <shlobj.h>
 #include <shellapi.h>
@@ -346,6 +347,76 @@ static void TestBackup()
     CHECK(d.Entries().size() == 1 && !d.Has(L"NoIcon.lnk"));
 }
 
+static void TestUpdater()
+{
+    int v[3];
+    CHECK(ParseVersion("v0.4.1", v) && v[0] == 0 && v[1] == 4 && v[2] == 1);
+    CHECK(ParseVersion("12.0.30", v) && v[0] == 12 && v[2] == 30);
+    CHECK(!ParseVersion("0.4", v) && !ParseVersion("0.4.1-beta", v) && !ParseVersion("", v) && !ParseVersion("v.1.2", v));
+    CHECK(IsNewerVersion("0.4.2", "0.4.1"));
+    CHECK(IsNewerVersion("v0.10.0", "0.9.9")); // numeric, not text order
+    CHECK(IsNewerVersion("1.0.0", "0.99.99"));
+    CHECK(!IsNewerVersion("0.4.1", "0.4.1"));
+    CHECK(!IsNewerVersion("0.4.0", "0.4.1"));
+    CHECK(!IsNewerVersion("garbage", "0.4.1"));
+
+    const char* json = R"({"tag_name":"v0.5.0","html_url":"https://github.com/rs4t/iconger/releases/tag/v0.5.0",
+        "draft":false,"prerelease":false,"body":"## New\n- things",
+        "assets":[{"name":"notes.txt","browser_download_url":"https://github.com/x/notes.txt","size":3},
+                  {"name":"iconger.exe","size":2408448,"digest":"sha256:ABCDEF",
+                   "browser_download_url":"https://github.com/rs4t/iconger/releases/download/v0.5.0/iconger.exe"}]})";
+    ReleaseInfo rel;
+    CHECK(ParseLatestRelease(json, rel));
+    CHECK(rel.version == "0.5.0" && rel.exeSize == 2408448 && rel.sha256 == "abcdef");
+    CHECK(rel.exeUrl == "https://github.com/rs4t/iconger/releases/download/v0.5.0/iconger.exe");
+    CHECK(rel.notes == "## New\n- things" && rel.pageUrl.find("v0.5.0") != std::string::npos);
+    CHECK(!ParseLatestRelease(R"({"tag_name":"v0.5.0","assets":[]})", rel));                     // no exe
+    CHECK(!ParseLatestRelease(R"({"tag_name":"v0.5.0","draft":true,"assets":[]})", rel));
+    CHECK(!ParseLatestRelease(R"({"tag_name":"v0.5.0","assets":[{"name":"iconger.exe",
+        "browser_download_url":"https://evil.example/iconger.exe"}]})", rel));                     // only from GitHub
+    CHECK(!ParseLatestRelease("not json", rel));
+
+    CHECK(Sha256Hex({ 'a', 'b', 'c' }) == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+
+    std::vector<uint8_t> exe(4096, 0x90);
+    exe[0] = 'M'; exe[1] = 'Z';
+    ReleaseInfo want;
+    want.exeSize = exe.size();
+    want.sha256 = Sha256Hex(exe);
+    std::string err;
+    CHECK(VerifyDownload(exe, want, err));
+    std::vector<uint8_t> html(4096, 'x'); // e.g. an error page instead of the file
+    CHECK(!VerifyDownload(html, want, err));
+    want.exeSize = 5000;
+    CHECK(!VerifyDownload(exe, want, err));
+    want.exeSize = exe.size();
+    exe[100] ^= 1;
+    CHECK(!VerifyDownload(exe, want, err));
+
+    // swap: the target becomes the new file, the old one is kept as .old until cleanup
+    std::wstring target = g_tmp + L"\\app.exe", fresh = g_tmp + L"\\app.exe.new";
+    auto write = [](const std::wstring& path, const char* text) {
+        HANDLE h = CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
+        DWORD w = 0;
+        WriteFile(h, text, (DWORD)strlen(text), &w, nullptr);
+        CloseHandle(h);
+    };
+    auto read = [](const std::wstring& path) {
+        std::vector<uint8_t> b;
+        ReadWholeFile(path, b);
+        return std::string(b.begin(), b.end());
+    };
+    write(target, "old");
+    write(fresh, "new");
+    CHECK(SwapInUpdate(fresh, target, err));
+    CHECK(read(target) == "new" && read(target + L".old") == "old" && !FileExists(fresh));
+    CleanupAfterUpdate(target);
+    CHECK(!FileExists(target + L".old") && FileExists(target));
+    // a missing download leaves the target untouched
+    CHECK(!SwapInUpdate(g_tmp + L"\\missing.new", target, err));
+    CHECK(read(target) == "new");
+}
+
 int wmain()
 {
     CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
@@ -366,6 +437,7 @@ int wmain()
     TestIconLibraries();
     TestIconLibrariesOnline();
     TestBackup();
+    TestUpdater();
 
     // best-effort cleanup
     SHFILEOPSTRUCTW op = {};

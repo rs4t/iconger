@@ -7,6 +7,7 @@
 #include "library_search.h"
 #include "settings.h"
 #include "shell_link.h"
+#include "updater.h"
 #include <windows.h>
 #include <atomic>
 #include <memory>
@@ -32,6 +33,9 @@ public:
 
     /// True while something animates or loads, so the main loop must not idle.
     bool IsBusy() const;
+
+    /// An update was installed: main should close the window and start the new exe.
+    bool WantsRelaunch() const { return m_relaunch; }
 
 private:
     struct Entry {
@@ -113,7 +117,13 @@ private:
     void DrawRestorePage();
     void DrawSettingsPage();
     void DrawModals();
+    void DrawWelcome();
     void HandleShortcuts();
+
+    // updates
+    void StartUpdateCheck(bool manual);
+    void InstallUpdate();
+    void DrawUpdateStatus(float width);
 
     HWND m_hwnd = nullptr;
     Settings m_settings;
@@ -142,6 +152,16 @@ private:
     bool m_openPinGuide = false;
     std::wstring m_pinGuideLnk;   // shortcut made for a packaged app, waiting to be pinned
     std::string m_pinGuideName;
+
+    enum class UpdateState { Idle, Checking, UpToDate, Available, Installing, Failed };
+    UpdateState m_update = UpdateState::Idle;
+    double m_updateTime = 0;       // when m_update last changed (status fades out)
+    bool m_updateManual = false;   // "Check now": report the result as a toast
+    ReleaseInfo m_release;
+    std::string m_updateError;
+    bool m_openUpdate = false;
+    bool m_relaunch = false;
+    float m_welcomeHeight = 0;     // measured last frame, to centre the welcome screen
 
     std::thread m_restartThread;
     std::atomic<bool> m_restarting{ false };

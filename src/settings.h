@@ -5,6 +5,9 @@ struct Settings {
     bool clearIconCache    = true;  // delete iconcache_*.db during restarts
     bool confirmRestart    = true;  // ask before restarting Explorer
     bool onlineLibraries   = true;  // search Dashboard Icons / Papirus / Simple Icons
+    bool startMenuShortcut = true;  // keep Programs\Iconger.lnk, so Windows search finds Iconger
+    bool checkUpdates      = true;  // ask GitHub for a newer release at startup
+    bool welcomed          = false; // the first-run welcome screen was dismissed
 
     void Load();
     void Save() const;

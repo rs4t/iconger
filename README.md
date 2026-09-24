@@ -13,11 +13,13 @@ Change the icons of the apps pinned to your Windows 10/11 taskbar.
 - Every icon you apply is saved as a multi-size `.ico` (16-256 px, images padded to a square) in `%LOCALAPPDATA%\Iconger\icons`, so it stays sharp and keeps working after you delete the original file, or after an app update moves its `.exe`.
 - Every original icon is backed up before the first change, exactly as it was (including `%ProgramFiles%`-style paths). Restore one app or all of them from the Restore page. That includes Store apps you re-pinned through Iconger.
 - Finds the "leftover" shortcuts Windows leaves behind when you re-pin an app (`App.lnk` next to `App (2).lnk`). Editing those does nothing, so Iconger shows which one the taskbar actually uses.
+- Keeps itself up to date: at startup it checks GitHub for a newer release and, if you say yes, downloads it (size and SHA-256 checked), swaps it in and restarts. Can be turned off in Settings.
+- Shows up in Windows search like any app (a Start menu shortcut, optional).
 - New icons show up on the taskbar right away. If one ever gets stuck, Settings has a one-click Explorer restart (via Restart Manager, so open folder windows come back) that can also clear the icon cache.
 
 ## Download
 
-Grab `iconger.exe` from the [latest release](https://github.com/rs4t/iconger/releases/latest). It's a single portable file: no installer, no admin rights. Settings, backups and converted icons are kept in `%LOCALAPPDATA%\Iconger`.
+Grab `iconger.exe` from the [latest release](https://github.com/rs4t/iconger/releases/latest). It's a single portable file: no installer, no admin rights. Settings, backups and converted icons are kept in `%LOCALAPPDATA%\Iconger`. The first time you run it, a short welcome screen lets you add it to the Start menu and choose whether it checks for updates.
 
 **Store / packaged apps** (Claude, Calculator, Settings, ...) are detected too. Their icon is locked inside the app package, so Iconger makes a shortcut with your icon that launches the same app, and walks you through swapping the pin (Windows 11 doesn't let programs pin to the taskbar themselves). After that it's a normal pin you can re-style any time.
 

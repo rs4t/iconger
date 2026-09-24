@@ -101,6 +101,14 @@ std::wstring SafeFileName(std::wstring name)
     return name;
 }
 
+// Full path of the running iconger.exe.
+std::wstring ExePath()
+{
+    wchar_t buf[MAX_PATH * 4];
+    DWORD n = GetModuleFileNameW(nullptr, buf, (DWORD)std::size(buf));
+    return std::wstring(buf, n);
+}
+
 // Shell item to ask for a pin's icon: the .lnk, or the packaged app itself.
 std::wstring ShellPath(const PinnedShortcut& sc) { return sc.packaged ? AppsFolderPath(sc.aumid) : sc.lnkPath; }
 
@@ -141,8 +149,14 @@ void App::Init(HWND hwnd, float dpiScale)
     m_hwnd = hwnd;
     m_settings.Load();
     m_backup.Load();
+    CleanupAfterUpdate(ExePath());
     ApplyStyle(dpiScale);
     Reload();
+    // on the very first run these wait for the welcome screen's choices
+    if (m_settings.welcomed) {
+        if (m_settings.startMenuShortcut) EnsureStartMenuShortcut(ExePath());
+        if (m_settings.checkUpdates) StartUpdateCheck(false);
+    }
 }
 
 void App::Shutdown()
@@ -669,6 +683,13 @@ void App::Frame()
         ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoSavedSettings |
         ImGuiWindowFlags_NoScrollWithMouse);
 
+    if (!m_settings.welcomed) {
+        DrawWelcome();
+        ImGui::End();
+        ui::RenderToasts();
+        return;
+    }
+
     float sidebarW = S(212);
     DrawSidebar(sidebarW);
 
@@ -771,6 +792,8 @@ void App::DrawSidebar(float width)
         }
         ImGui::SetCursorPosY(ImGui::GetCursorPosY() - S(4));
     }
+
+    DrawUpdateStatus(width);
 
     // Bottom: version + repo link
     float bottom = ImGui::GetWindowHeight();
@@ -1603,6 +1626,38 @@ void App::DrawSettingsPage()
     ui::EndCard();
 
     ImGui::Spacing();
+    ui::BeginCard("##updates", ImVec2(maxW, 0), 20);
+    ui::IconTile(ICON_DOWNLOAD, warning, warningSoft, S(40));
+    ImGui::SameLine(0, S(14));
+    ImGui::BeginGroup();
+    ui::Heading("Updates and Start menu", "Iconger can keep itself up to date, and shows up in Windows search like any app.");
+    ImGui::EndGroup();
+    {
+        const bool busy = m_update == UpdateState::Checking || m_update == UpdateState::Installing;
+        if (m_update == UpdateState::Available) {
+            std::string label = "Update to v" + m_release.version;
+            if (ui::Button(label.c_str(), ICON_DOWNLOAD, ui::ButtonKind::Primary)) m_openUpdate = true;
+        } else if (ui::Button(m_update == UpdateState::Checking ? "Checking..." : "Check for updates", ICON_REFRESH,
+                              ui::ButtonKind::Outline, ImVec2(0, 0), !busy)) {
+            StartUpdateCheck(true);
+        }
+    }
+    ImGui::Separator();
+    if (ui::SettingRow("Check for updates at startup",
+                       "Each time Iconger opens, it asks GitHub whether there's a newer version.", &m_settings.checkUpdates))
+        m_settings.Save();
+    if (ui::SettingRow("Show Iconger in the Start menu",
+                       "So you can find it by searching \"Iconger\" in Windows, and pin it from there.", &m_settings.startMenuShortcut)) {
+        m_settings.Save();
+        if (m_settings.startMenuShortcut) {
+            if (!EnsureStartMenuShortcut(ExePath())) ui::Toast(ui::ToastKind::Error, "Couldn't add Iconger to the Start menu.");
+        } else {
+            RemoveStartMenuShortcut();
+        }
+    }
+    ui::EndCard();
+
+    ImGui::Spacing();
     ui::BeginCard("##storage", ImVec2(maxW, 0), 20);
     ui::IconTile(ICON_FOLDER_OPEN, violet, violetSoft, S(40));
     ImGui::SameLine(0, S(14));
@@ -1648,10 +1703,10 @@ void App::DrawSettingsPage()
 
 void App::DrawModals()
 {
-    auto beginModal = [](const char* id) {
+    auto beginModal = [](const char* id, float width = 420.0f) {
         ImVec2 center = ImGui::GetMainViewport()->GetCenter();
         ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-        ImGui::SetNextWindowSize(ImVec2(S(strcmp(id, "##pinguide") == 0 ? 520.0f : 420.0f), 0));
+        ImGui::SetNextWindowSize(ImVec2(S(width), 0));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(S(24), S(22)));
         ImGui::PushStyleColor(ImGuiCol_PopupBg, card);
         bool open = ImGui::BeginPopupModal(id, nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove);
@@ -1731,7 +1786,7 @@ void App::DrawModals()
     }
 
     if (m_openPinGuide) { ImGui::OpenPopup("##pinguide"); m_openPinGuide = false; }
-    if (beginModal("##pinguide")) {
+    if (beginModal("##pinguide", 520.0f)) {
         ui::IconTile(ICON_PIN, primary, primarySoft, S(40));
         ImGui::SameLine(0, S(14));
         ImGui::BeginGroup();
@@ -1763,6 +1818,89 @@ void App::DrawModals()
         ImGui::EndPopup();
     }
 
+    if (m_openUpdate) { ImGui::OpenPopup("##update"); m_openUpdate = false; }
+    if (beginModal("##update", 480.0f)) {
+        const bool installing = m_update == UpdateState::Installing;
+        ui::IconTile(ICON_SPARKLES, primary, primarySoft, S(40));
+        ImGui::SameLine(0, S(14));
+        ImGui::BeginGroup();
+        ImGui::PushTextWrapPos(RightEdge());
+        std::string title = "Iconger v" + m_release.version + " is out";
+        ui::Heading(title.c_str(), "You have v" ICONGER_VERSION ". Update now? Iconger downloads the new version "
+                                   "from GitHub, then restarts.");
+        ImGui::PopTextWrapPos();
+        ImGui::EndGroup();
+
+        // release notes, lightly cleaned of markdown
+        if (!m_release.notes.empty()) {
+            ImGui::Dummy(ImVec2(0, S(2)));
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, bg);
+            ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, S(10));
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(S(14), S(10)));
+            ImGui::BeginChild("##notes", ImVec2(0, S(190)), ImGuiChildFlags_AlwaysUseWindowPadding);
+            ImGui::PopStyleVar(2);
+            ImGui::PopStyleColor();
+            ImGui::PushTextWrapPos(0);
+            size_t pos = 0;
+            const std::string& n = m_release.notes;
+            while (pos < n.size()) {
+                size_t eol = n.find('\n', pos);
+                if (eol == std::string::npos) eol = n.size();
+                std::string line = n.substr(pos, eol - pos);
+                pos = eol + 1;
+                if (!line.empty() && line.back() == '\r') line.pop_back();
+                if (line.empty() || line.find("iconger.exe` below") != std::string::npos) continue;
+                for (const char* mark : { "**", "`" })
+                    for (size_t m; (m = line.find(mark)) != std::string::npos;) line.erase(m, strlen(mark));
+                if (line.rfind("#", 0) == 0) {
+                    line.erase(0, line.find_first_not_of("# "));
+                    ImGui::Dummy(ImVec2(0, S(2)));
+                    ImGui::PushFont(fonts.semibold, 0);
+                    ImGui::TextUnformatted(line.c_str());
+                    ImGui::PopFont();
+                } else if (line.rfind("- ", 0) == 0 || line.rfind("* ", 0) == 0) {
+                    ImGui::PushStyleColor(ImGuiCol_Text, textDim);
+                    ImGui::Bullet();
+                    ImGui::SameLine();
+                    ImGui::TextWrapped("%s", line.c_str() + 2);
+                    ImGui::PopStyleColor();
+                } else {
+                    ImGui::PushStyleColor(ImGuiCol_Text, textDim);
+                    ImGui::TextWrapped("%s", line.c_str());
+                    ImGui::PopStyleColor();
+                }
+            }
+            ImGui::PopTextWrapPos();
+            ImGui::EndChild();
+        }
+
+        ImGui::Dummy(ImVec2(0, S(4)));
+        if (installing) {
+            ui::Spinner(S(18), primary);
+            ImGui::SameLine();
+            ImGui::PushStyleColor(ImGuiCol_Text, textSecondary);
+            ImGui::TextUnformatted("Downloading and installing...");
+            ImGui::PopStyleColor();
+            ImGui::Dummy(ImVec2(0, S(2)));
+        } else if (!m_updateError.empty()) {
+            ImGui::PushTextWrapPos(RightEdge());
+            ImGui::PushStyleColor(ImGuiCol_Text, danger);
+            ImGui::TextWrapped("Update failed: %s", m_updateError.c_str());
+            ImGui::PopStyleColor();
+            ImGui::PopTextWrapPos();
+            if (ui::Button("Download it from GitHub instead", ICON_EXTERNAL, ui::ButtonKind::Ghost) && !m_release.pageUrl.empty())
+                ShellExecuteA(nullptr, "open", m_release.pageUrl.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+        }
+        float bw = (ImGui::GetContentRegionAvail().x - S(10)) * 0.5f;
+        if (ui::Button("Not now", nullptr, ui::ButtonKind::Secondary, ImVec2(bw, S(36)), !installing) ||
+            (!installing && ImGui::IsKeyPressed(ImGuiKey_Escape)))
+            ImGui::CloseCurrentPopup();
+        ImGui::SameLine(0, S(10));
+        if (ui::Button("Update and restart", ICON_DOWNLOAD, ui::ButtonKind::Primary, ImVec2(bw, S(36)), !installing))
+            InstallUpdate();
+        ImGui::EndPopup();
+    }
+
     // blocking overlay while Explorer restarts
     if (m_restarting && !ImGui::IsPopupOpen("##restarting")) ImGui::OpenPopup("##restarting");
     if (beginModal("##restarting")) {
@@ -1774,4 +1912,208 @@ void App::DrawModals()
         if (!m_restarting) ImGui::CloseCurrentPopup();
         ImGui::EndPopup();
     }
+}
+
+// ============================================================================
+// Updates
+// ============================================================================
+
+void App::StartUpdateCheck(bool manual)
+{
+    if (m_update == UpdateState::Checking || m_update == UpdateState::Installing) return;
+    m_update = UpdateState::Checking;
+    m_updateTime = ImGui::GetTime();
+    m_updateManual = manual;
+    m_updateError.clear();
+    m_jobs.Submit([this]() -> JobPool::Done {
+        ReleaseInfo rel;
+        std::string err;
+        bool ok = FetchLatestRelease(rel, err);
+        return [this, ok, rel, err] {
+            m_updateTime = ImGui::GetTime();
+            if (!ok) {
+                m_update = UpdateState::Failed;
+                m_updateError = err;
+                if (m_updateManual) ui::Toast(ui::ToastKind::Error, "Couldn't check for updates: " + err);
+            } else if (!IsNewerVersion(rel.version, ICONGER_VERSION)) {
+                m_update = UpdateState::UpToDate;
+                if (m_updateManual) ui::Toast(ui::ToastKind::Success, "You have the latest version (v" ICONGER_VERSION ").");
+            } else {
+                m_release = rel;
+                m_update = UpdateState::Available;
+                m_openUpdate = true;
+            }
+        };
+    });
+}
+
+void App::InstallUpdate()
+{
+    if (m_update != UpdateState::Available) return;
+    m_update = UpdateState::Installing;
+    m_updateTime = ImGui::GetTime();
+    m_updateError.clear();
+    m_jobs.Submit([this, rel = m_release, exe = ExePath()]() -> JobPool::Done {
+        std::string err;
+        bool ok = DownloadAndInstallUpdate(rel, exe, err);
+        return [this, ok, err] {
+            m_updateTime = ImGui::GetTime();
+            if (ok) {
+                m_relaunch = true; // main closes the window and starts the new exe
+                return;
+            }
+            m_update = UpdateState::Available;
+            m_updateError = err;
+            m_openUpdate = true;
+        };
+    });
+}
+
+// Small status line at the bottom of the sidebar: checking / up to date / update available.
+void App::DrawUpdateStatus(float width)
+{
+    const double age = ImGui::GetTime() - m_updateTime;
+    const bool transient = m_update == UpdateState::UpToDate || m_update == UpdateState::Failed;
+    const double shownFor = 4.0;
+    if (m_update == UpdateState::Idle || (transient && age > shownFor)) return;
+    float alpha = std::min(std::clamp((float)age / 0.25f, 0.0f, 1.0f), // fade in
+                           transient ? std::clamp((float)(shownFor - age) / 0.6f, 0.0f, 1.0f) : 1.0f);
+    // redraw only while something moves: a spinner, the fade in, or a fade out
+    const bool spinning = m_update == UpdateState::Checking || m_update == UpdateState::Installing;
+    if (spinning || transient || age < 0.3) ui::KeepAnimating(0.1f);
+    auto fade = [alpha](ImU32 c) {
+        ImVec4 v = ImGui::ColorConvertU32ToFloat4(c);
+        v.w *= alpha;
+        return ImGui::ColorConvertFloat4ToU32(v);
+    };
+
+    ImGui::SetCursorPos(ImVec2(S(12), ImGui::GetWindowHeight() - S(88)));
+    ImVec2 p = ImGui::GetCursorScreenPos();
+    ImVec2 size(width - S(24), S(32));
+    const bool clickable = m_update == UpdateState::Available;
+    bool hovered = false;
+    if (clickable) {
+        if (ImGui::InvisibleButton("##update", size)) m_openUpdate = true;
+        hovered = ImGui::IsItemHovered();
+    } else {
+        ImGui::Dummy(size);
+    }
+    if (m_update == UpdateState::Failed && ImGui::IsItemHovered()) ui::Tooltip(m_updateError.c_str());
+
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    if (clickable)
+        dl->AddRectFilled(p, ImVec2(p.x + size.x, p.y + size.y), fade(hovered ? IM_COL32(255, 138, 61, 60) : primarySoft), S(8));
+
+    const char* icon = nullptr; // nullptr = spinner
+    ImU32 iconCol = textSecondary, textCol = textSecondary;
+    std::string label;
+    switch (m_update) {
+    case UpdateState::Checking:   label = "Checking for updates"; break;
+    case UpdateState::Installing: label = "Updating..."; break;
+    case UpdateState::UpToDate:   icon = ICON_CIRCLE_CHECK; iconCol = success; label = "Up to date"; break;
+    case UpdateState::Failed:     icon = ICON_ALERT; iconCol = textMuted; textCol = textMuted; label = "Couldn't check for updates"; break;
+    case UpdateState::Available:  icon = ICON_DOWNLOAD; iconCol = primary; textCol = text; label = "Update to v" + m_release.version; break;
+    default: return;
+    }
+
+    ImGui::PushFont(nullptr, fontSmall);
+    const float cy = p.y + size.y * 0.5f;
+    const float fh = ImGui::GetFontSize();
+    if (icon) {
+        dl->AddText(ImVec2(p.x + S(10), cy - fh * 0.5f), fade(iconCol), icon);
+    } else {
+        ImVec2 c(p.x + S(17), cy);
+        float a0 = (float)ImGui::GetTime() * 6.0f;
+        dl->PathArcTo(c, S(5.5f), a0, a0 + IM_PI * 1.4f, 24);
+        dl->PathStroke(fade(textSecondary), S(1.6f));
+    }
+    ImGui::PushClipRect(p, ImVec2(p.x + size.x - S(6), p.y + size.y), true);
+    dl->AddText(ImVec2(p.x + S(32), cy - fh * 0.5f), fade(textCol), label.c_str());
+    ImGui::PopClipRect();
+    ImGui::PopFont();
+}
+
+// ============================================================================
+// First run
+// ============================================================================
+
+void App::DrawWelcome()
+{
+    ImGui::SetCursorPos(ImVec2(0, 0));
+    // scrolls (wheel only, no bar) if the window is too small for it
+    ImGui::BeginChild("##welcome", ImVec2(0, 0), 0, ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar);
+    const float winW = ImGui::GetWindowWidth(), winH = ImGui::GetWindowHeight();
+    const float colW = std::min(S(520), winW - S(48));
+    const float x0 = (winW - colW) * 0.5f;
+    const float top = std::max(S(20), (winH - m_welcomeHeight) * 0.5f);
+    ImGui::SetCursorPos(ImVec2(x0, top));
+
+    auto centered = [&](const char* s, ImU32 col) {
+        ImGui::SetCursorPosX(x0 + std::max(0.0f, (colW - ImGui::CalcTextSize(s).x) * 0.5f));
+        ImGui::PushStyleColor(ImGuiCol_Text, col);
+        ImGui::TextUnformatted(s);
+        ImGui::PopStyleColor();
+    };
+
+    ImGui::PushTextWrapPos(x0 + colW);
+    const float logo = S(64);
+    ImGui::SetCursorPosX(x0 + (colW - logo) * 0.5f);
+    ui::Logo(logo);
+    ImGui::Dummy(ImVec2(0, S(4)));
+    ImGui::PushFont(fonts.bold, 28.0f);
+    centered("Welcome to Iconger", text);
+    ImGui::PopFont();
+    ImGui::SetCursorPosY(ImGui::GetCursorPosY() - S(4));
+    centered("Give the apps on your taskbar the icons you want.", textSecondary);
+    ImGui::Dummy(ImVec2(0, S(12)));
+
+    struct Step { const char* icon; ImU32 col, soft; const char* title; const char* body; };
+    const Step steps[] = {
+        { ICON_PIN, primary, primarySoft, "Pick an app on your taskbar",
+          "Everything you've pinned shows up, Store apps included." },
+        { ICON_WAND, violet, violetSoft, "Choose its new icon",
+          "About 20,000 ready-made icons, the app's own alternatives, or your own pictures. Tweak the colours if you like." },
+        { ICON_UNDO, success, successSoft, "Undo any time",
+          "The original icon is backed up first, and the Restore page puts it back." },
+    };
+    for (const Step& st : steps) {
+        ImGui::SetCursorPosX(x0);
+        ui::IconTile(st.icon, st.col, st.soft, S(40));
+        ImGui::SameLine(0, S(14));
+        ImGui::BeginGroup();
+        ui::Heading(st.title, st.body, fontBody + 1);
+        ImGui::EndGroup();
+        ImGui::Dummy(ImVec2(0, S(4)));
+    }
+    ImGui::PopTextWrapPos();
+
+    ImGui::SetCursorPosX(x0);
+    ui::BeginCard("##welcomeopts", ImVec2(colW, 0), 16);
+    ui::SettingRow("Add Iconger to the Start menu",
+                   "Find it by searching \"Iconger\" in Windows, like any other app.", &m_settings.startMenuShortcut);
+    ui::SettingRow("Check for updates", "When Iconger opens, it looks for a newer version on GitHub and asks before installing it.",
+                   &m_settings.checkUpdates);
+    ui::EndCard();
+
+    ImGui::Dummy(ImVec2(0, S(6)));
+    ImGui::SetCursorPosX(x0);
+    if (ui::Button("Get started", ICON_ARROW_RIGHT, ui::ButtonKind::Primary, ImVec2(colW, S(42))) ||
+        ImGui::IsKeyPressed(ImGuiKey_Enter)) {
+        m_settings.welcomed = true;
+        m_settings.Save();
+        if (m_settings.startMenuShortcut) EnsureStartMenuShortcut(ExePath());
+        else RemoveStartMenuShortcut();
+        if (m_settings.checkUpdates) StartUpdateCheck(false);
+    }
+    ImGui::PushFont(nullptr, fontSmall);
+    ImGui::Dummy(ImVec2(0, S(2)));
+    centered("You can change these later in Settings.", textMuted);
+    ImGui::PopFont();
+
+    // centre vertically next frame (the content's height is only known once drawn)
+    float h = ImGui::GetCursorPosY() - top;
+    if (std::fabs(h - m_welcomeHeight) > 1.0f) ui::KeepAnimating(0.1f);
+    m_welcomeHeight = h;
+    ImGui::Dummy(ImVec2(0, S(16)));
+    ImGui::EndChild();
 }

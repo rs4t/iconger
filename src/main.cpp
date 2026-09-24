@@ -172,7 +172,9 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, PWSTR, int nCmdShow)
 
         if (framesToRender > 0) --framesToRender;
         if (ImGui::IsAnyItemActive()) framesToRender = 3; // dragging a scrollbar etc.
+        if (g_app.WantsRelaunch()) running = false;
     }
+    const bool relaunch = g_app.WantsRelaunch();
 
     g_app.Shutdown();
     ImGui_ImplDX11_Shutdown();
@@ -183,5 +185,19 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, PWSTR, int nCmdShow)
     CoUninitialize();
     ReleaseMutex(mutex);
     CloseHandle(mutex);
+
+    // An update replaced iconger.exe: start the new one. Only now, with the single-instance
+    // mutex released, or it would just focus this (closing) window and quit.
+    if (relaunch) {
+        wchar_t exe[MAX_PATH * 4];
+        DWORD n = GetModuleFileNameW(nullptr, exe, (DWORD)std::size(exe));
+        std::wstring cmd = L"\"" + std::wstring(exe, n) + L"\"";
+        STARTUPINFOW si = { sizeof(si) };
+        PROCESS_INFORMATION pi = {};
+        if (CreateProcessW(exe, cmd.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &si, &pi)) {
+            CloseHandle(pi.hThread);
+            CloseHandle(pi.hProcess);
+        }
+    }
     return 0;
 }
