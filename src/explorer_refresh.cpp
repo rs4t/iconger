@@ -1,162 +1,119 @@
 #include "explorer_refresh.h"
+#include "app_paths.h"
+#include <windows.h>
 #include <shlobj.h>
 #include <tlhelp32.h>
-#include <cstdio>
+#include <restartmanager.h>
 #include <vector>
-#include <filesystem>
-#include <string>
 
-#pragma comment(lib, "shell32.lib")
-#pragma comment(lib, "user32.lib")
-
-// ----------------------------------------------------------------------
-// Lightweight refresh
-// ----------------------------------------------------------------------
-
-bool SignalIconChange() {
-    // SHCNE_ASSOCCHANGED tells the shell to re-read icon associations.
-    // SHCNE_UPDATEIMAGE tells it to refresh the icon cache for a specific image.
-    // We send both as a best-effort approach.
-    SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, nullptr, nullptr);
-    SHChangeNotify(SHCNE_UPDATEIMAGE, SHCNF_IDLIST, nullptr, nullptr);
-    return true;
+void SignalIconChange()
+{
+    SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST | SHCNF_FLUSH, nullptr, nullptr);
 }
 
-// ----------------------------------------------------------------------
-// Icon cache clearing
-// ----------------------------------------------------------------------
-
-bool ClearIconCache() {
-    wchar_t explorerPath[MAX_PATH] = {};
-    HRESULT hr = SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr,
-                                   SHGFP_TYPE_CURRENT, explorerPath);
-    if (FAILED(hr)) {
-        // Try environment variable fallback
-        DWORD ret = GetEnvironmentVariableW(L"LOCALAPPDATA", explorerPath, MAX_PATH);
-        if (ret == 0 || ret >= MAX_PATH) return false;
-    }
-
-    std::wstring cacheDir = std::wstring(explorerPath) +
-        L"\\Microsoft\\Windows\\Explorer";
-
-    if (!std::filesystem::exists(cacheDir))
-        return false;
-
-    bool anyDeleted = false;
-
-    // Delete iconcache_*.db files
-    try {
-        for (auto& entry : std::filesystem::directory_iterator(cacheDir)) {
-            std::wstring filename = entry.path().filename().wstring();
-            // Match: iconcache_*.db or IconCache.db
-            if (filename.find(L"iconcache_") == 0 &&
-                filename.rfind(L".db") == filename.length() - 3) {
-                // Try to delete; may fail if explorer is currently reading it
-                std::error_code ec;
-                std::filesystem::remove(entry.path(), ec);
-                if (!ec) anyDeleted = true;
-            }
-        }
-
-        // Also try IconCache.db (older Windows)
-        std::wstring legacyCache = cacheDir + L"\\IconCache.db";
-        if (std::filesystem::exists(legacyCache)) {
-            std::error_code ec;
-            std::filesystem::remove(legacyCache, ec);
-            if (!ec) anyDeleted = true;
-        }
-    } catch (...) {
-        // Ignore iteration errors
-    }
-
-    return anyDeleted;
-}
-
-// ----------------------------------------------------------------------
-// Explorer restart
-// ----------------------------------------------------------------------
-
-bool RestartExplorer() {
-    // First, try to gracefully restart via shell32
-    // Use ExitWindowsEx with EWX_RESTART... no, that restarts the whole system.
-    // We'll kill explorer.exe — Windows will auto-restart it.
-
-    // Find explorer.exe
-    HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-    if (hSnapshot == INVALID_HANDLE_VALUE)
-        return false;
-
-    std::vector<DWORD> explorerPids;
-    PROCESSENTRY32W pe = {};
-    pe.dwSize = sizeof(pe);
-
-    if (Process32FirstW(hSnapshot, &pe)) {
+static std::vector<DWORD> FindExplorerPids()
+{
+    std::vector<DWORD> pids;
+    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snap == INVALID_HANDLE_VALUE) return pids;
+    PROCESSENTRY32W pe = { sizeof(pe) };
+    if (Process32FirstW(snap, &pe)) {
         do {
-            if (_wcsicmp(pe.szExeFile, L"explorer.exe") == 0) {
-                explorerPids.push_back(pe.th32ProcessID);
-            }
-        } while (Process32NextW(hSnapshot, &pe));
+            if (_wcsicmp(pe.szExeFile, L"explorer.exe") == 0) pids.push_back(pe.th32ProcessID);
+        } while (Process32NextW(snap, &pe));
     }
-    CloseHandle(hSnapshot);
+    CloseHandle(snap);
+    return pids;
+}
 
-    if (explorerPids.empty()) {
-        // Explorer not running — just launch it
-        ShellExecuteW(nullptr, L"open", L"explorer.exe", nullptr, nullptr, SW_SHOW);
-        return true;
+// Explorer only holds the cache files open while it runs, so this has to happen
+// while it is stopped. (The old code deleted them first, while they were locked.)
+static int DeleteIconCache()
+{
+    std::wstring dir = ExpandEnv(L"%LOCALAPPDATA%\\Microsoft\\Windows\\Explorer");
+    int deleted = 0;
+    WIN32_FIND_DATAW ffd = {};
+    HANDLE h = FindFirstFileW((dir + L"\\iconcache*.db").c_str(), &ffd);
+    if (h != INVALID_HANDLE_VALUE) {
+        do {
+            if (DeleteFileW((dir + L"\\" + ffd.cFileName).c_str())) ++deleted;
+        } while (FindNextFileW(h, &ffd));
+        FindClose(h);
+    }
+    // pre-Windows 8 location
+    if (DeleteFileW(ExpandEnv(L"%LOCALAPPDATA%\\IconCache.db").c_str())) ++deleted;
+    return deleted;
+}
+
+static bool WaitForExplorer(DWORD timeoutMs)
+{
+    for (DWORD waited = 0; waited < timeoutMs; waited += 250) {
+        if (FindWindowW(L"Shell_TrayWnd", nullptr)) return true;
+        Sleep(250);
+    }
+    return FindWindowW(L"Shell_TrayWnd", nullptr) != nullptr;
+}
+
+static void LaunchExplorer()
+{
+    wchar_t path[MAX_PATH] = {};
+    GetWindowsDirectoryW(path, MAX_PATH);
+    wcscat_s(path, L"\\explorer.exe");
+    STARTUPINFOW si = { sizeof(si) };
+    PROCESS_INFORMATION pi = {};
+    if (CreateProcessW(path, nullptr, nullptr, nullptr, FALSE, 0, nullptr, nullptr, &si, &pi)) {
+        CloseHandle(pi.hThread);
+        CloseHandle(pi.hProcess);
+    }
+}
+
+ExplorerRestartResult RestartExplorer(bool clearIconCache)
+{
+    ExplorerRestartResult result;
+
+    std::vector<RM_UNIQUE_PROCESS> procs;
+    for (DWORD pid : FindExplorerPids()) {
+        HANDLE hp = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+        if (!hp) continue;
+        FILETIME created, exited, kernel, user;
+        if (GetProcessTimes(hp, &created, &exited, &kernel, &user))
+            procs.push_back({ pid, created });
+        CloseHandle(hp);
     }
 
-    // Set a flag that tells explorer to restart after shutdown
-    // (it checks this via SHGetRestart)
-    // Then terminate each explorer process.
-    for (DWORD pid : explorerPids) {
-        HANDLE hProc = OpenProcess(PROCESS_TERMINATE, FALSE, pid);
-        if (hProc) {
-            TerminateProcess(hProc, 0);
-            CloseHandle(hProc);
+    DWORD session = 0;
+    WCHAR key[CCH_RM_SESSION_KEY + 1] = {};
+    bool rmSession = RmStartSession(&session, 0, key) == ERROR_SUCCESS;
+    bool stopped = procs.empty();
+    if (rmSession && !procs.empty() &&
+        RmRegisterResources(session, 0, nullptr, (UINT)procs.size(), procs.data(), 0, nullptr) == ERROR_SUCCESS)
+        stopped = RmShutdown(session, RmForceShutdown, nullptr) == ERROR_SUCCESS;
+
+    if (!stopped) {
+        // Last resort: hard kill. Windows' AutoRestartShell usually brings the shell back.
+        result.forced = true;
+        for (const auto& p : procs) {
+            HANDLE hp = OpenProcess(PROCESS_TERMINATE | SYNCHRONIZE, FALSE, p.dwProcessId);
+            if (!hp) continue;
+            TerminateProcess(hp, 1);
+            WaitForSingleObject(hp, 3000);
+            CloseHandle(hp);
         }
     }
 
-    // Wait a moment then launch explorer if it didn't auto-restart
-    Sleep(1000);
+    if (clearIconCache) result.cacheFilesDeleted = DeleteIconCache();
 
-    // Check if explorer is running; if not, launch it
-    hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-    bool found = false;
-    if (hSnapshot != INVALID_HANDLE_VALUE) {
-        pe.dwSize = sizeof(pe);
-        if (Process32FirstW(hSnapshot, &pe)) {
-            do {
-                if (_wcsicmp(pe.szExeFile, L"explorer.exe") == 0) {
-                    found = true;
-                    break;
-                }
-            } while (Process32NextW(hSnapshot, &pe));
-        }
-        CloseHandle(hSnapshot);
+    if (rmSession) {
+        if (stopped && !procs.empty()) RmRestart(session, 0, nullptr);
+        RmEndSession(session);
     }
 
-    if (!found) {
-        ShellExecuteW(nullptr, L"open", L"explorer.exe", nullptr, nullptr, SW_SHOW);
+    if (!WaitForExplorer(6000)) {
+        // Checking for the tray window (not just the process) avoids starting a
+        // second explorer.exe, which would pop open a stray folder window.
+        LaunchExplorer();
+        WaitForExplorer(6000);
     }
-
-    return true;
-}
-
-// ----------------------------------------------------------------------
-// Nuclear refresh
-// ----------------------------------------------------------------------
-
-bool NuclearRefresh() {
-    ClearIconCache();
-    return RestartExplorer();
-}
-
-bool ConfirmNuclearRefresh(HWND parentHwnd) {
-    int ret = MessageBoxW(parentHwnd,
-        L"Applying icons requires clearing the icon cache and restarting Explorer.\n\n"
-        L"This will briefly flicker your desktop and taskbar.\n\n"
-        L"Proceed?",
-        L"Iconger - Refresh Explorer?",
-        MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2);
-    return (ret == IDYES);
+    result.ok = FindWindowW(L"Shell_TrayWnd", nullptr) != nullptr;
+    return result;
 }

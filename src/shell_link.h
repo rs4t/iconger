@@ -1,36 +1,35 @@
 #pragma once
-#include <windows.h>
 #include <string>
 #include <vector>
 
+/// One pinned taskbar shortcut (.lnk in the User Pinned\TaskBar folder).
 struct PinnedShortcut {
-    std::wstring filePath;         // Full path to the .lnk file
-    std::wstring displayName;      // Friendly name (from IShellLinkW::GetDescription or filename)
-    std::wstring targetPath;       // What the shortcut launches
-    std::wstring iconPath;         // Current icon location
-    int           iconIndex = 0;   // Current icon index
-    HICON         hIcon = nullptr; // Extracted icon (32x32)
-    bool          valid = true;    // false if the .lnk is malformed
+    std::wstring lnkPath;      // Full path to the .lnk file
+    std::wstring displayName;  // File name without .lnk and without a " (2)" re-pin suffix
+    std::wstring targetPath;   // What the shortcut launches (empty for shell/Store items)
+    std::wstring iconPath;     // Icon location as stored in the .lnk (may contain %VARS%), empty = none
+    int          iconIndex = 0;
+    bool         onTaskbar = true; // false = leftover file from an earlier pin; editing it does nothing
 };
 
-/// Enumerate all .lnk files in the taskbar pinned shortcuts folder.
-/// Returns a vector of PinnedShortcut structs, one per valid .lnk found.
-std::vector<PinnedShortcut> EnumeratePinnedShortcuts();
-
-/// Read a single .lnk file from disk and populate a PinnedShortcut.
-/// Sets valid=false on failure (malformed .lnk, access denied, etc.).
-PinnedShortcut ReadShortcut(const std::wstring& lnkPath);
-
-/// Set the icon location (path + index) on an existing .lnk file and persist it.
-/// Returns true on success.
-bool SetShortcutIcon(const std::wstring& lnkPath,
-                     const std::wstring& newIconPath,
-                     int newIconIndex);
-
-/// Get the pinned shortcuts folder path (as a wide string).
+/// %APPDATA%\Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar
 std::wstring GetPinnedShortcutsFolder();
 
-/// Reset the icon location on a shortcut so it falls back to the target's
-/// default embedded icon. Equivalent to clearing the IconLocation override.
-/// Returns true on success.
-bool ResetShortcutIcon(const std::wstring& lnkPath);
+/// Every readable .lnk in the pinned folder: live pins first, then by name.
+/// Re-pinning an app makes Windows write "App (2).lnk" and orphan "App.lnk";
+/// the Taskband registry blob tells us which file the taskbar really uses.
+std::vector<PinnedShortcut> EnumeratePinnedShortcuts();
+
+/// True if `lnkFileName` (no folder) appears in the Taskband "Favorites" blob.
+bool BlobMentionsFile(const std::vector<unsigned char>& blob, const std::wstring& lnkFileName);
+
+/// Read one .lnk. Returns false if it cannot be loaded.
+bool ReadShortcut(const std::wstring& lnkPath, PinnedShortcut& out);
+
+/// Point the shortcut's icon at newIconPath,newIconIndex and save it.
+/// An empty newIconPath removes the override so the target's own icon is used.
+bool SetShortcutIcon(const std::wstring& lnkPath, const std::wstring& newIconPath, int newIconIndex);
+
+/// The file the shortcut's icon currently comes from (expanded), plus its index.
+/// Falls back to the target when the .lnk has no explicit icon location.
+void ResolveShortcutIcon(const PinnedShortcut& sc, std::wstring& path, int& index);

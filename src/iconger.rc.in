@@ -1,0 +1,30 @@
+#include <windows.h>
+
+// App icon (first icon resource = what Explorer shows for the exe)
+1 ICON "@CMAKE_SOURCE_DIR@/assets/iconger.ico"
+
+// Lucide icon font, loaded by ui/theme.cpp via FindResource
+1001 RCDATA "@LUCIDE_TTF@"
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,0
+ PRODUCTVERSION @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,0
+ FILEOS VOS_NT_WINDOWS32
+ FILETYPE VFT_APP
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "FileDescription", "Iconger - taskbar icon changer"
+            VALUE "FileVersion", "@PROJECT_VERSION@"
+            VALUE "ProductName", "Iconger"
+            VALUE "ProductVersion", "@ICONGER_VERSION_LABEL@"
+            VALUE "LegalCopyright", "MIT License"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END

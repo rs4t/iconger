@@ -1,54 +1,36 @@
 #pragma once
-#include <windows.h>
-#include <d3d11.h>
 #include <string>
 #include <vector>
+#include <cstdint>
 
-struct IconInfo {
-    std::wstring sourcePath;   // The .exe/.dll/.ico file path
-    int          index = 0;    // Icon resource index
-    HICON        hIcon = nullptr;
+/// Straight-alpha RGBA8 pixels, top-down.
+struct Image {
+    int w = 0, h = 0;
+    std::vector<uint8_t> rgba;
+    bool empty() const { return w <= 0 || h <= 0; }
 };
 
-// ---------- Win32 icon extraction helpers ----------
+/// Number of icons in an .exe/.dll/.ico (0 if none).
+int CountIcons(const std::wstring& path);
 
-/// Extract icons from a file (.exe, .dll, .ico) using ExtractIconExW.
-/// Returns a vector of all available icons (up to maxCount).
-std::vector<IconInfo> ExtractIconsFromFile(const std::wstring& filePath,
-                                           int maxCount = 100);
+/// Extract icon #index from path at (about) size x size pixels.
+bool LoadIconImage(const std::wstring& path, int index, int size, Image& out);
 
-/// Extract a single icon at a given index from a file.
-HICON ExtractSingleIcon(const std::wstring& filePath, int index);
+/// Ask the shell for an item's icon (works for Store apps / shell folders whose
+/// shortcuts have no file-based icon). Goes through the shell icon cache.
+bool LoadShellItemImage(const std::wstring& path, int size, Image& out);
 
-/// Destroy an HICON and null out the handle.
-void FreeIcon(HICON& hIcon);
+/// Kinds of files the icon picker accepts.
+enum class IconSourceKind { Unsupported, IcoFile, ImageFile, IconLibrary };
+IconSourceKind ClassifyIconSource(const std::wstring& path);
 
-// ---------- DX11 texture helpers ----------
+/// Turn a user-chosen .ico/.png/.jpg/... into a stable .ico under IconsDir().
+/// Images are padded to square and rendered at 16..256 px so the icon is crisp at
+/// every taskbar scale. Returns the new path, or empty with `error` filled.
+std::wstring ImportIconFile(const std::wstring& src, std::string& error);
 
-/// Create an ID3D11ShaderResourceView from an HICON so ImGui can render it.
-/// Returns nullptr on failure. The caller owns the resource (must Release).
-ID3D11ShaderResourceView* CreateTextureFromHICON(
-    ID3D11Device* device,
-    HICON hIcon);
+/// Write a multi-resolution .ico from square RGBA images (sizes 1..256).
+bool WriteIco(const std::wstring& path, const std::vector<Image>& images);
 
-/// Create a DX11 texture from raw RGBA pixel data (common for stb_image output).
-/// The caller owns the returned SRV.
-ID3D11ShaderResourceView* CreateTextureFromRGBA(
-    ID3D11Device* device,
-    const uint8_t* rgbaData,
-    int width,
-    int height);
-
-// ---------- PNG → ICO conversion (stb_image) ----------
-
-/// Convert a PNG file (or any file stb_image can decode) to a temporary .ico file.
-/// Returns the path to the generated .ico file, or empty on failure.
-/// The caller should delete the temp file when done.
-std::wstring ConvertPNGToICO(const std::wstring& pngFilePath);
-
-/// Convert raw RGBA data to a .ico file (written to tempPath).
-/// Returns true on success. The .ico will contain a single 32x32 entry.
-bool WriteICOFromRGBA(const std::wstring& icoFilePath,
-                      const uint8_t* rgbaData,
-                      int width,
-                      int height);
+/// Pad to a centered square and resize. Exposed for tests.
+Image MakeSquareResized(const Image& src, int size);
