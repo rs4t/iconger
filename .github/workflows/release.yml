@@ -1,0 +1,43 @@
+# Push a tag like v0.4.1 to build iconger.exe with MSVC, run the tests on Windows
+# and publish a GitHub release with the exe. The annotated tag's message is the
+# release notes (git tag -a v0.4.1 -F notes.md).
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the tag's message is read below
+
+      - name: Configure
+        run: cmake -B build -G "Visual Studio 17 2022" -A x64
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Check version matches tag
+        shell: bash
+        run: |
+          want="${GITHUB_REF_NAME#v}"
+          grep -q "project(iconger VERSION ${want} " CMakeLists.txt || { echo "CMakeLists.txt version is not ${want}"; exit 1; }
+
+      - name: Publish release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git fetch --force origin "refs/tags/${GITHUB_REF_NAME}:refs/tags/${GITHUB_REF_NAME}"
+          git tag -l --format='%(contents)' "${GITHUB_REF_NAME}" > notes.md
+          gh release create "${GITHUB_REF_NAME}" build/Release/iconger.exe --title "${GITHUB_REF_NAME}" --notes-file notes.md
