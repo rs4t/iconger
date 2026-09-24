@@ -331,10 +331,10 @@ void App::ApplyCandidate()
 
     ReloadEntry(e);
     m_cand = Candidate();
-    ++m_pendingChanges;
+    // SetShortcutIcon + this notification are enough for the taskbar to redraw;
+    // restarting Explorer is only a manual fallback (Settings).
     SignalIconChange();
-    ui::Toast(ui::ToastKind::Success, "New icon saved for " + U8(e.sc.displayName) + ".");
-    if (m_settings.restartAfterApply) RequestRestart();
+    ui::Toast(ui::ToastKind::Success, "New icon applied to " + U8(e.sc.displayName) + ".");
 }
 
 void App::RestoreOriginal(const std::wstring& lnkPath, bool quiet)
@@ -344,6 +344,8 @@ void App::RestoreOriginal(const std::wstring& lnkPath, bool quiet)
     std::wstring path = b ? b->iconPath : L"";
     int index = b ? b->iconIndex : 0;
     std::string name = U8(FileStem(lnkPath));
+    for (const auto& e : m_entries) // "Firefox", not "Firefox (2)"
+        if (_wcsicmp(e.sc.lnkPath.c_str(), lnkPath.c_str()) == 0) name = U8(e.sc.displayName);
 
     if (FileExists(lnkPath) && !SetShortcutIcon(lnkPath, path, index)) {
         ui::Toast(ui::ToastKind::Error, "Couldn't restore " + name + ".");
@@ -353,7 +355,6 @@ void App::RestoreOriginal(const std::wstring& lnkPath, bool quiet)
     m_backup.Save();
     for (auto& e : m_entries)
         if (_wcsicmp(e.sc.lnkPath.c_str(), lnkPath.c_str()) == 0) ReloadEntry(e);
-    ++m_pendingChanges;
     SignalIconChange();
     if (!quiet) ui::Toast(ui::ToastKind::Success, "Restored the original icon of " + name + ".");
 }
@@ -415,10 +416,9 @@ void App::PollRestart()
     m_restarting = false;
     m_restartDone = false;
     if (m_restartResult.ok) {
-        m_pendingChanges = 0;
         ui::Toast(ui::ToastKind::Success, m_restartResult.forced
             ? "Explorer restarted (it had to be force-closed)."
-            : "Explorer restarted. Your taskbar is up to date.");
+            : "Explorer restarted.");
     } else {
         ui::Toast(ui::ToastKind::Error, "Explorer didn't come back. Press Ctrl+Shift+Esc, then File > Run new task > explorer.exe");
     }
@@ -564,35 +564,8 @@ void App::DrawSidebar(float width)
         ImGui::SetCursorPosY(ImGui::GetCursorPosY() - S(4));
     }
 
-    // Bottom: pending-restart card + version
+    // Bottom: version + repo link
     float bottom = ImGui::GetWindowHeight();
-    if (m_pendingChanges > 0 || m_restarting) {
-        float cardH = S(118);
-        ImGui::SetCursorPos(ImVec2(S(12), bottom - cardH - S(64)));
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, card);
-        ImGui::PushStyleColor(ImGuiCol_Border, border);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(S(12), S(12)));
-        ImGui::BeginChild("##pending", ImVec2(width - S(24), cardH), ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding);
-        ImGui::PopStyleVar();
-        ImGui::PopStyleColor(2);
-        ImGui::PushStyleColor(ImGuiCol_Text, warning);
-        ImGui::TextUnformatted(ICON_POWER);
-        ImGui::PopStyleColor();
-        ImGui::SameLine();
-        ImGui::PushFont(fonts.semibold, fontSmall);
-        ImGui::Text("%d change%s pending", m_pendingChanges, m_pendingChanges == 1 ? "" : "s");
-        ImGui::PopFont();
-        ImGui::SetCursorPosY(ImGui::GetCursorPosY() - S(6));
-        ImGui::PushFont(nullptr, fontSmall);
-        ImGui::PushStyleColor(ImGuiCol_Text, textSecondary);
-        ImGui::TextWrapped("Restart Explorer to update the taskbar.");
-        ImGui::PopStyleColor();
-        ImGui::PopFont();
-        if (ui::Button(m_restarting ? "Restarting..." : "Restart Explorer", ICON_REFRESH, ui::ButtonKind::Outline,
-                       ImVec2(-1, 0), !m_restarting))
-            RequestRestart();
-        ImGui::EndChild();
-    }
 
     ImGui::SetCursorPos(ImVec2(S(20), bottom - S(44)));
     ImGui::PushStyleColor(ImGuiCol_Text, textMuted);
@@ -609,31 +582,6 @@ void App::DrawSidebar(float width)
 // ============================================================================
 // Pinned apps page
 // ============================================================================
-
-void App::DrawPendingBanner()
-{
-    // shown on the list page too; the sidebar card is easy to miss on first use
-    if (m_pendingChanges <= 0 || m_restarting) return;
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, warningSoft);
-    ImGui::PushStyleColor(ImGuiCol_Border, warningBorder);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(S(14), S(12)));
-    ImGui::BeginChild("##banner", ImVec2(0, 0), ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding | ImGuiChildFlags_AutoResizeY);
-    ImGui::PopStyleVar();
-    ImGui::PopStyleColor(2);
-    float btnW = S(170);
-    ImGui::PushStyleColor(ImGuiCol_Text, warning);
-    ImGui::TextUnformatted(ICON_INFO);
-    ImGui::PopStyleColor();
-    ImGui::SameLine();
-    ImGui::PushTextWrapPos(ImGui::GetContentRegionAvail().x - btnW);
-    ImGui::TextWrapped("The taskbar keeps showing the old icon%s until Explorer restarts.", m_pendingChanges == 1 ? "" : "s");
-    ImGui::PopTextWrapPos();
-    ImGui::SameLine(RightEdge() - btnW);
-    ImGui::SetCursorPosY(ImGui::GetCursorPosY() - S(6));
-    if (ui::Button("Restart Explorer", ICON_REFRESH, ui::ButtonKind::Outline, ImVec2(btnW, 0))) RequestRestart();
-    ImGui::EndChild();
-    ImGui::Spacing();
-}
 
 void App::DrawPinnedPage()
 {
@@ -665,7 +613,6 @@ void App::DrawPinnedPage()
         OpenPath(GetPinnedShortcutsFolder());
 
     ImGui::Dummy(ImVec2(0, S(6)));
-    DrawPendingBanner();
 
     if (m_entries.empty()) {
         ui::BeginCard("##empty");
@@ -1092,7 +1039,6 @@ void App::DrawRestorePage()
         if (ui::Button("Restore all", ICON_ROTATE_CCW, ui::ButtonKind::Danger, ImVec2(bw, 0))) m_openRestoreAll = true;
     }
     ImGui::Dummy(ImVec2(0, S(6)));
-    DrawPendingBanner();
 
     if (backups.empty()) {
         ui::BeginCard("##none");
@@ -1170,12 +1116,14 @@ void App::DrawSettingsPage()
     ui::IconTile(ICON_MONITOR_COG, primary, primarySoft, S(40));
     ImGui::SameLine(0, S(14));
     ImGui::BeginGroup();
-    ui::Heading("Explorer", "The taskbar caches icons, so it only picks up changes after Explorer restarts.");
+    ui::Heading("Icon not updating?", "New icons normally show up on the taskbar right away. If one gets stuck, "
+                                      "restarting Explorer makes Windows reload every icon.");
     ImGui::EndGroup();
+    if (ui::Button(m_restarting ? "Restarting..." : "Restart Explorer", ICON_REFRESH, ui::ButtonKind::Outline,
+                   ImVec2(0, 0), !m_restarting))
+        RequestRestart();
     ImGui::Separator();
     bool changed = false;
-    changed |= ui::SettingRow("Restart Explorer after every change",
-        "Otherwise changes queue up and you restart once, from the sidebar.", &m_settings.restartAfterApply);
     changed |= ui::SettingRow("Ask before restarting",
         "Explorer restarting makes the taskbar and desktop blink for a second.", &m_settings.confirmRestart);
     changed |= ui::SettingRow("Clear the icon cache",

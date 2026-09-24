@@ -16,16 +16,12 @@ static void WriteBool(const wchar_t* key, bool v)
 
 void Settings::Load()
 {
-    restartAfterApply = ReadBool(L"restartAfterApply", restartAfterApply);
     clearIconCache    = ReadBool(L"clearIconCache", clearIconCache);
     confirmRestart    = ReadBool(L"confirmRestart", confirmRestart);
-    compactList       = ReadBool(L"compactList", compactList);
 }
 
 void Settings::Save() const
 {
-    WriteBool(L"restartAfterApply", restartAfterApply);
     WriteBool(L"clearIconCache", clearIconCache);
     WriteBool(L"confirmRestart", confirmRestart);
-    WriteBool(L"compactList", compactList);
 }

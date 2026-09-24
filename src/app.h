@@ -61,7 +61,6 @@ private:
     void ReloadEntry(Entry& e);
     Texture LoadEntryIcon(const PinnedShortcut& sc, float px) const;
     bool IsCustomized(const Entry& e) const;
-    int PendingCount() const { return m_pendingChanges; }
 
     // actions
     void OpenEditor(int index);
@@ -80,7 +79,6 @@ private:
     // views
     void DrawSidebar(float width);
     void DrawPinnedPage();
-    void DrawPendingBanner();
     void DrawAppCard(int index, float width);
     void DrawEditor();
     void DrawPreviewCard();
@@ -108,7 +106,6 @@ private:
     std::wstring m_fileLib;
     IconGrid m_grid;
 
-    int m_pendingChanges = 0;
     bool m_openConfirm = false;
     bool m_openRestoreAll = false;
     bool m_openCleanup = false;

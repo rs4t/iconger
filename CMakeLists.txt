@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.20)
 #   MINOR  updates: new features, changes, semi-big stuff
 #   PATCH  small updates and fixes
 # Release tags are "v" + this, e.g. v0.2.1. The app shows a BETA badge while MAJOR is 0.
-project(iconger VERSION 0.2.1 LANGUAGES CXX RC)
+project(iconger VERSION 0.2.2 LANGUAGES CXX RC)
 set(ICONGER_VERSION_LABEL "${PROJECT_VERSION}")
 
 set(CMAKE_CXX_STANDARD 17)

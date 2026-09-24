@@ -10,7 +10,7 @@ Change the icons of the apps pinned to your Windows 10/11 taskbar.
 - Images are padded to a square and saved as a multi-size `.ico` (16-256 px) in `%LOCALAPPDATA%\Iconger\icons`, so they stay sharp and keep working after you delete the original.
 - Every original icon is backed up before the first change. Restore one app or all of them from the Restore page.
 - Finds the "leftover" shortcuts Windows leaves behind when you re-pin an app (`App.lnk` next to `App (2).lnk`). Editing those does nothing, so Iconger shows which one the taskbar actually uses.
-- Changes queue up; restart Explorer once (via Restart Manager, so open folder windows come back) to see them on the taskbar.
+- New icons show up on the taskbar right away. If one ever gets stuck, Settings has a one-click Explorer restart (via Restart Manager, so open folder windows come back) that can also clear the icon cache.
 
 ## Download
 
