@@ -94,6 +94,7 @@ private:
     void HandlePickedFile(const std::wstring& path);
     void BrowseForIcon();
     void ApplyCandidate();
+    void ApplyToPackagedApp(const std::wstring& iconPath, int iconIndex);
     void RestoreOriginal(const std::wstring& lnkPath, bool quiet = false);
     void RestoreAll();
     void RecycleLeftovers();
@@ -156,6 +157,9 @@ private:
     bool m_openConfirm = false;
     bool m_openRestoreAll = false;
     bool m_openCleanup = false;
+    bool m_openPinGuide = false;
+    std::wstring m_pinGuideLnk;   // shortcut made for a packaged app, waiting to be pinned
+    std::string m_pinGuideName;
 
     std::thread m_restartThread;
     std::atomic<bool> m_restarting{ false };

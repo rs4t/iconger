@@ -19,7 +19,7 @@ Change the icons of the apps pinned to your Windows 10/11 taskbar.
 
 Grab `iconger.exe` from the [latest release](https://github.com/rs4t/iconger/releases/latest). It's a single portable file: no installer, no admin rights. Settings, backups and converted icons are kept in `%LOCALAPPDATA%\Iconger`.
 
-Not supported yet: Store/UWP apps pinned to the taskbar (Settings, Calculator, ...), because they have no shortcut file to edit.
+**Store / packaged apps** (Claude, Calculator, Settings, ...) are detected too. Their icon is locked inside the app package, so Iconger makes a shortcut with your icon that launches the same app, and walks you through swapping the pin (Windows 11 doesn't let programs pin to the taskbar themselves). After that it's a normal pin you can re-style any time.
 
 ## Build
 

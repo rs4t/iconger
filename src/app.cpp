@@ -94,6 +94,12 @@ void IconFrame(const Texture& tex, float size, const char* caption, bool highlig
     ImGui::EndGroup();
 }
 
+// Shell item to ask for a pin's icon: the .lnk, or the packaged app itself.
+std::wstring ShellPath(const PinnedShortcut& sc) { return sc.packaged ? AppsFolderPath(sc.aumid) : sc.lnkPath; }
+
+// Stable identity of a pin across reloads.
+std::wstring EntryKey(const PinnedShortcut& sc) { return sc.packaged ? sc.aumid : sc.lnkPath; }
+
 // Right edge of the content region in window coordinates (GetContentRegionMax is gone in 1.92).
 float RightEdge() { return ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x; }
 
@@ -159,13 +165,13 @@ Texture App::LoadEntryIcon(const PinnedShortcut& sc, float px) const
     // Our own extraction first: the shell's icon cache would show the old icon
     // until Explorer restarts. Fall back to the shell for Store apps etc.
     if (!LoadIconImage(path, index, size, img))
-        LoadShellItemImage(sc.lnkPath, size, img);
+        LoadShellItemImage(ShellPath(sc), size, img);
     return Texture(img);
 }
 
 void App::Reload()
 {
-    std::wstring keepLnk = m_editing >= 0 ? m_entries[m_editing].sc.lnkPath : L"";
+    std::wstring keepLnk = m_editing >= 0 ? EntryKey(m_entries[m_editing].sc) : L"";
     m_entries.clear();
     for (auto& sc : EnumeratePinnedShortcuts()) {
         Entry e;
@@ -176,7 +182,7 @@ void App::Reload()
     m_editing = -1;
     if (!keepLnk.empty()) {
         for (int i = 0; i < (int)m_entries.size(); ++i)
-            if (_wcsicmp(m_entries[i].sc.lnkPath.c_str(), keepLnk.c_str()) == 0) m_editing = i;
+            if (_wcsicmp(EntryKey(m_entries[i].sc).c_str(), keepLnk.c_str()) == 0) m_editing = i;
         if (m_editing < 0) CloseEditor(); // it was unpinned meanwhile
     }
 }
@@ -184,12 +190,12 @@ void App::Reload()
 void App::ReloadEntry(Entry& e)
 {
     PinnedShortcut fresh;
-    if (ReadShortcut(e.sc.lnkPath, fresh)) e.sc = std::move(fresh);
+    if (!e.sc.packaged && ReadShortcut(e.sc.lnkPath, fresh)) e.sc = std::move(fresh);
     e.icon = LoadEntryIcon(e.sc, S(40));
     if (m_editing >= 0 && &m_entries[m_editing] == &e) m_editingPreview = LoadEntryIcon(e.sc, S(96));
 }
 
-bool App::IsCustomized(const Entry& e) const { return m_backup.Has(e.sc.lnkPath); }
+bool App::IsCustomized(const Entry& e) const { return !e.sc.packaged && m_backup.Has(e.sc.lnkPath); }
 
 bool App::IsBusy() const
 {
@@ -293,8 +299,8 @@ void App::CustomizeCurrentIcon()
     }
     // Store apps / shell items: no icon file, so work from the shell's rendering
     Image shell;
-    if (LoadShellItemImage(sc.lnkPath, 256, shell))
-        SetCandidatePixels(std::move(shell), WideToUtf8(FileStem(sc.lnkPath)) + "-current", "Current icon");
+    if (LoadShellItemImage(ShellPath(sc), 256, shell))
+        SetCandidatePixels(std::move(shell), WideToUtf8(sc.displayName) + "-current", "Current icon");
     else
         ui::Toast(ui::ToastKind::Error, "Couldn't read the current icon.");
 }
@@ -451,6 +457,11 @@ void App::ApplyCandidate()
         }
     }
 
+    if (e.sc.packaged) {
+        ApplyToPackagedApp(iconPath, iconIndex);
+        return;
+    }
+
     if (!SetShortcutIcon(e.sc.lnkPath, iconPath, iconIndex)) {
         ui::Toast(ui::ToastKind::Error, "Couldn't save " + U8(e.sc.displayName) + ". Is the shortcut read-only?");
         return;
@@ -466,6 +477,28 @@ void App::ApplyCandidate()
     // restarting Explorer is only a manual fallback (Settings).
     SignalIconChange();
     ui::Toast(ui::ToastKind::Success, "New icon applied to " + U8(e.sc.displayName) + ".");
+}
+
+void App::ApplyToPackagedApp(const std::wstring& iconPath, int iconIndex)
+{
+    // A packaged app's icon lives inside its signed package and can't be changed.
+    // Instead: a shortcut that launches the app (same AppUserModelID, so its window
+    // groups with the pin) with our icon, which the user pins in place of the original.
+    // Windows 11 has no API to pin for them, hence the guide.
+    const PinnedShortcut& sc = m_entries[m_editing].sc;
+    std::wstring name = sc.displayName;
+    for (auto& c : name)
+        if (wcschr(L"<>:\"/\\|?*", c) || c < 32) c = L'_';
+    std::wstring lnk = AppShortcutsFolder() + L"\\" + name + L".lnk";
+    if (!CreateAppShortcut(lnk, sc.aumid, iconPath, iconIndex)) {
+        ui::Toast(ui::ToastKind::Error, "Couldn't create the shortcut for " + U8(sc.displayName) + ".");
+        return;
+    }
+    m_cand = Candidate();
+    m_adjust = IconAdjust();
+    m_pinGuideLnk = lnk;
+    m_pinGuideName = U8(sc.displayName);
+    m_openPinGuide = true;
 }
 
 void App::RestoreOriginal(const std::wstring& lnkPath, bool quiet)
@@ -835,7 +868,8 @@ void App::DrawAppCard(int index, float width)
     } else if (IsCustomized(e)) {
         dl->AddText(ImVec2(tx, y2), success, ICON_CHECK " Custom icon");
     } else {
-        std::string sub = e.sc.targetPath.empty() ? "Windows app" : U8(FileStem(e.sc.targetPath) + LowerExt(e.sc.targetPath));
+        std::string sub = e.sc.packaged ? "Store app" : e.sc.targetPath.empty() ? "Windows app"
+                        : U8(FileStem(e.sc.targetPath) + LowerExt(e.sc.targetPath));
         ImGui::PushStyleColor(ImGuiCol_Text, textSecondary);
         ImGui::RenderTextEllipsis(dl, ImVec2(tx, y2), ImVec2(tx + textW, y2 + S(20)), tx + textW, sub.c_str(), nullptr, nullptr);
         ImGui::PopStyleColor();
@@ -938,7 +972,7 @@ void App::DrawPreviewCard()
     int curIndex = 0;
     ResolveShortcutIcon(e.sc, curPath, curIndex);
     bool usesOwnIcon = curIndex == 0 && _wcsicmp(curPath.c_str(), e.sc.targetPath.c_str()) == 0;
-    bool canReset = customized || (!e.sc.iconPath.empty() && !usesOwnIcon);
+    bool canReset = !e.sc.packaged && (customized || (!e.sc.iconPath.empty() && !usesOwnIcon));
     if (m_cand) {
         if (ui::Button("Discard selection", ICON_X, ui::ButtonKind::Ghost, ImVec2(-1, 0))) {
             m_cand = Candidate();
@@ -948,7 +982,9 @@ void App::DrawPreviewCard()
                           ui::ButtonKind::Secondary, ImVec2(-1, 0), canReset)) {
         RestoreOriginal(e.sc.lnkPath);
     }
-    if (!canReset && !m_cand) ui::Tooltip("This shortcut already uses the app's own icon.");
+    if (!canReset && !m_cand)
+        ui::Tooltip(e.sc.packaged ? "This pin already shows the app's own icon."
+                                  : "This shortcut already uses the app's own icon.");
     ui::EndCard();
 
     // details
@@ -961,15 +997,21 @@ void App::DrawPreviewCard()
         ImGui::SetCursorPosY(ImGui::GetCursorPosY() - S(8));
         ui::TextEllipsis(value.empty() ? "-" : value.c_str(), w, textDim);
     };
-    row("SHORTCUT", U8(FileStem(e.sc.lnkPath)) + ".lnk");
+    if (e.sc.packaged) row("APP ID", U8(e.sc.aumid));
+    else row("SHORTCUT", U8(FileStem(e.sc.lnkPath)) + ".lnk");
     row("LAUNCHES", e.sc.targetPath.empty() ? "Windows / Store app" : U8(e.sc.targetPath));
     std::wstring iconPath;
     int iconIndex = 0;
     ResolveShortcutIcon(e.sc, iconPath, iconIndex);
     row("ICON FROM", iconPath.empty() ? "App default" : U8(iconPath) + (iconIndex ? "  #" + std::to_string(iconIndex) : ""));
     ImGui::Dummy(ImVec2(0, S(2)));
-    if (ui::Button("Show shortcut in Explorer", ICON_EXTERNAL, ui::ButtonKind::Secondary, ImVec2(-1, 0)))
+    if (e.sc.packaged) {
+        ImGui::PushStyleColor(ImGuiCol_Text, textSecondary);
+        ImGui::TextWrapped("Store app: Iconger makes a shortcut with your icon, and you pin it in place of this one.");
+        ImGui::PopStyleColor();
+    } else if (ui::Button("Show shortcut in Explorer", ICON_EXTERNAL, ui::ButtonKind::Secondary, ImVec2(-1, 0))) {
         ShowInExplorer(e.sc.lnkPath);
+    }
     ui::EndCard();
 }
 
@@ -1636,7 +1678,7 @@ void App::DrawModals()
     auto beginModal = [](const char* id) {
         ImVec2 center = ImGui::GetMainViewport()->GetCenter();
         ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-        ImGui::SetNextWindowSize(ImVec2(S(420), 0));
+        ImGui::SetNextWindowSize(ImVec2(S(strcmp(id, "##pinguide") == 0 ? 520.0f : 420.0f), 0));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(S(24), S(22)));
         ImGui::PushStyleColor(ImGuiCol_PopupBg, card);
         bool open = ImGui::BeginPopupModal(id, nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove);
@@ -1711,6 +1753,38 @@ void App::DrawModals()
         if (ui::Button("Move to Recycle Bin", ICON_TRASH, ui::ButtonKind::Primary, ImVec2(bw, S(36)))) {
             ImGui::CloseCurrentPopup();
             RecycleLeftovers();
+        }
+        ImGui::EndPopup();
+    }
+
+    if (m_openPinGuide) { ImGui::OpenPopup("##pinguide"); m_openPinGuide = false; }
+    if (beginModal("##pinguide")) {
+        ui::IconTile(ICON_PIN, primary, primarySoft, S(40));
+        ImGui::SameLine(0, S(14));
+        ImGui::BeginGroup();
+        ImGui::PushTextWrapPos(RightEdge());
+        ui::Heading("Two clicks left", ("Windows doesn't let apps pin to the taskbar, so swap the " + m_pinGuideName +
+                                        " pin yourself:").c_str());
+        ImGui::PopTextWrapPos();
+        ImGui::EndGroup();
+        ImGui::Dummy(ImVec2(0, S(2)));
+        ImGui::PushTextWrapPos(RightEdge());
+        ImGui::TextWrapped("1.  Right-click %s on the taskbar and choose Unpin from taskbar.", m_pinGuideName.c_str());
+        ImGui::TextWrapped("2.  Open Start, search for %s (the one with your icon), right-click it and choose "
+                           "Pin to taskbar. Or use the folder below: right-click the shortcut, Show more options, "
+                           "Pin to taskbar.", m_pinGuideName.c_str());
+        ImGui::PushStyleColor(ImGuiCol_Text, textSecondary);
+        ImGui::TextWrapped("After that it behaves like any other pin: change its icon again here any time, no re-pinning needed.");
+        ImGui::PopStyleColor();
+        ImGui::PopTextWrapPos();
+        ImGui::Dummy(ImVec2(0, S(4)));
+        float bw = (ImGui::GetContentRegionAvail().x - S(10)) * 0.5f;
+        if (ui::Button("Show the shortcut", ICON_FOLDER_OPEN, ui::ButtonKind::Secondary, ImVec2(bw, S(36))))
+            ShowInExplorer(m_pinGuideLnk);
+        ImGui::SameLine(0, S(10));
+        if (ui::Button("Done", ICON_CHECK, ui::ButtonKind::Primary, ImVec2(bw, S(36))) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+            ImGui::CloseCurrentPopup();
+            Reload(); // picks up the new pin if it's already swapped
         }
         ImGui::EndPopup();
     }

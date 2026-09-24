@@ -3,6 +3,8 @@
 #include <windows.h>
 #include <shlobj.h>
 #include <shlwapi.h>
+#include <propkey.h>
+#include <propvarutil.h>
 #include <wrl/client.h>
 #include <algorithm>
 #include <cstring>
@@ -88,7 +90,89 @@ bool ReadShortcut(const std::wstring& lnkPath, PinnedShortcut& sc)
         sc.iconPath = iconBuf;
         sc.iconIndex = idx;
     }
+
+    ComPtr<IPropertyStore> props;
+    if (SUCCEEDED(link.As(&props))) {
+        PROPVARIANT pv;
+        PropVariantInit(&pv);
+        if (SUCCEEDED(props->GetValue(PKEY_AppUserModel_ID, &pv)) && pv.vt == VT_LPWSTR && pv.pwszVal)
+            sc.aumid = pv.pwszVal;
+        PropVariantClear(&pv);
+    }
     return true;
+}
+
+std::vector<std::wstring> ExtractPinnedAppIds(const std::vector<unsigned char>& blob)
+{
+    // "<PackageFamilyName>!<AppId>", e.g. Claude_pzs8sxrjxfjjc!Claude. The family name is
+    // "<name>_<13-char publisher id>", which keeps random '!' in other data from matching.
+    auto isIdChar = [](wchar_t c) { return iswalnum(c) || c == L'.' || c == L'_' || c == L'-'; };
+    std::vector<std::wstring> ids;
+    for (size_t align = 0; align < 2; ++align) {
+        if (blob.size() < align + 2) continue;
+        std::wstring hay((blob.size() - align) / 2, L' ');
+        memcpy(hay.data(), blob.data() + align, hay.size() * sizeof(wchar_t));
+        for (size_t bang = hay.find(L'!'); bang != std::wstring::npos; bang = hay.find(L'!', bang + 1)) {
+            size_t a = bang, b = bang + 1;
+            while (a > 0 && isIdChar(hay[a - 1])) --a;
+            while (b < hay.size() && isIdChar(hay[b])) ++b;
+            std::wstring family = hay.substr(a, bang - a), app = hay.substr(bang + 1, b - bang - 1);
+            size_t us = family.rfind(L'_');
+            if (app.empty() || us == std::wstring::npos || family.size() - us - 1 != 13) continue;
+            std::wstring id = family + L"!" + app;
+            if (std::find(ids.begin(), ids.end(), id) == ids.end()) ids.push_back(id);
+        }
+    }
+    return ids;
+}
+
+std::wstring AppsFolderPath(const std::wstring& aumid) { return L"shell:AppsFolder\\" + aumid; }
+
+std::wstring AppDisplayName(const std::wstring& aumid)
+{
+    ComPtr<IShellItem> item;
+    if (FAILED(SHCreateItemFromParsingName(AppsFolderPath(aumid).c_str(), nullptr, IID_PPV_ARGS(&item))))
+        return {};
+    PWSTR name = nullptr;
+    std::wstring out;
+    if (SUCCEEDED(item->GetDisplayName(SIGDN_NORMALDISPLAY, &name)) && name) out = name;
+    CoTaskMemFree(name);
+    return out;
+}
+
+std::wstring AppShortcutsFolder()
+{
+    std::wstring dir;
+    PWSTR programs = nullptr;
+    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Programs, 0, nullptr, &programs))) dir = programs;
+    CoTaskMemFree(programs);
+    if (dir.empty()) dir = ExpandEnv(L"%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs");
+    dir += L"\\Iconger";
+    CreateDirectoryW(dir.c_str(), nullptr);
+    return dir;
+}
+
+bool CreateAppShortcut(const std::wstring& lnkPath, const std::wstring& aumid,
+                       const std::wstring& iconPath, int iconIndex)
+{
+    PIDLIST_ABSOLUTE pidl = nullptr;
+    if (FAILED(SHParseDisplayName(AppsFolderPath(aumid).c_str(), nullptr, &pidl, 0, nullptr))) return false;
+    ComPtr<IShellLinkW> link;
+    bool ok = SUCCEEDED(CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&link))) &&
+              SUCCEEDED(link->SetIDList(pidl));
+    CoTaskMemFree(pidl);
+    if (!ok) return false;
+    if (!iconPath.empty()) link->SetIconLocation(iconPath.c_str(), iconIndex);
+
+    ComPtr<IPropertyStore> props;
+    if (FAILED(link.As(&props))) return false;
+    PROPVARIANT pv;
+    if (FAILED(InitPropVariantFromString(aumid.c_str(), &pv))) return false;
+    ok = SUCCEEDED(props->SetValue(PKEY_AppUserModel_ID, pv)) && SUCCEEDED(props->Commit());
+    PropVariantClear(&pv);
+
+    ComPtr<IPersistFile> file;
+    return ok && SUCCEEDED(link.As(&file)) && SUCCEEDED(file->Save(lnkPath.c_str(), TRUE));
 }
 
 std::vector<PinnedShortcut> EnumeratePinnedShortcuts()
@@ -102,16 +186,33 @@ std::vector<PinnedShortcut> EnumeratePinnedShortcuts()
 
     WIN32_FIND_DATAW ffd = {};
     HANDLE hFind = FindFirstFileW((folder + L"\\*.lnk").c_str(), &ffd);
-    if (hFind == INVALID_HANDLE_VALUE) return results;
-    do {
-        if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
-        PinnedShortcut sc;
-        if (ReadShortcut(folder + L"\\" + ffd.cFileName, sc)) {
-            sc.onTaskbar = !haveBlob || BlobMentionsFile(blob, ffd.cFileName);
+    if (hFind != INVALID_HANDLE_VALUE) {
+        do {
+            if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+            PinnedShortcut sc;
+            if (ReadShortcut(folder + L"\\" + ffd.cFileName, sc)) {
+                sc.onTaskbar = !haveBlob || BlobMentionsFile(blob, ffd.cFileName);
+                results.push_back(std::move(sc));
+            }
+        } while (FindNextFileW(hFind, &ffd));
+        FindClose(hFind);
+    }
+
+    // Packaged apps pinned straight from Start have no .lnk; skip ones an Iconger
+    // shortcut (same AppUserModelID) already stands in for.
+    if (haveBlob) {
+        for (const std::wstring& id : ExtractPinnedAppIds(blob)) {
+            bool covered = std::any_of(results.begin(), results.end(), [&](const PinnedShortcut& s) {
+                return s.onTaskbar && _wcsicmp(s.aumid.c_str(), id.c_str()) == 0; });
+            std::wstring name = covered ? L"" : AppDisplayName(id);
+            if (covered || name.empty()) continue; // not installed any more
+            PinnedShortcut sc;
+            sc.displayName = name;
+            sc.aumid = id;
+            sc.packaged = true;
             results.push_back(std::move(sc));
         }
-    } while (FindNextFileW(hFind, &ffd));
-    FindClose(hFind);
+    }
 
     std::sort(results.begin(), results.end(), [](const PinnedShortcut& a, const PinnedShortcut& b) {
         if (a.onTaskbar != b.onTaskbar) return a.onTaskbar;

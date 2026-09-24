@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.20)
 #   MINOR  updates: new features, changes, semi-big stuff
 #   PATCH  small updates and fixes
 # Release tags are "v" + this, e.g. v0.2.1. The app shows a BETA badge while MAJOR is 0.
-project(iconger VERSION 0.3.1 LANGUAGES CXX RC)
+project(iconger VERSION 0.4.0 LANGUAGES CXX RC)
 set(ICONGER_VERSION_LABEL "${PROJECT_VERSION}")
 
 set(CMAKE_CXX_STANDARD 17)
@@ -80,7 +80,7 @@ add_library(iconger_core STATIC
 target_include_directories(iconger_core PUBLIC src ${stb_SOURCE_DIR} ${nanosvg_SOURCE_DIR}/src)
 target_compile_definitions(iconger_core PUBLIC UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
 target_compile_definitions(iconger_core PRIVATE "ICONGER_CORE_VERSION=L\"${ICONGER_VERSION_LABEL}\"")
-target_link_libraries(iconger_core PUBLIC ole32 oleaut32 shell32 shlwapi user32 gdi32 rstrtmgr winhttp
+target_link_libraries(iconger_core PUBLIC ole32 oleaut32 shell32 shlwapi user32 gdi32 rstrtmgr winhttp propsys
     nlohmann_json::nlohmann_json)
 
 # -------------------------------------------------------------------

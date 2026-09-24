@@ -154,6 +154,35 @@ static void TestLeftoverDetection()
     CHECK(ReadShortcut(lnk, sc) && sc.displayName == L"Tool (beta)");
 }
 
+static void TestPackagedApps()
+{
+    // Taskband entries hold the app ID as UTF-16 among other bytes
+    std::vector<unsigned char> blob = { 0x31, 0x00, 0x21, 0x00 }; // a stray "1!" must not match
+    for (const wchar_t* s : { L"x Claude_pzs8sxrjxfjjc!Claude ", L"Microsoft.WindowsCalculator_8wekyb3d8bbwe!App" }) {
+        for (const wchar_t* c = s; *c; ++c) { blob.push_back((unsigned char)(*c & 0xff)); blob.push_back((unsigned char)(*c >> 8)); }
+        blob.push_back(0); blob.push_back(0);
+    }
+    auto ids = ExtractPinnedAppIds(blob);
+    CHECK(ids.size() == 2);
+    CHECK(!ids.empty() && ids[0] == L"Claude_pzs8sxrjxfjjc!Claude");
+    CHECK(ids.size() > 1 && ids[1] == L"Microsoft.WindowsCalculator_8wekyb3d8bbwe!App");
+
+    // Windows Settings is a packaged app on every Windows 10/11 install
+    const std::wstring settings = L"windows.immersivecontrolpanel_cw5n1h2txyewy!microsoft.windows.immersivecontrolpanel";
+    CHECK(!AppDisplayName(settings).empty());
+    CHECK(AppDisplayName(L"Nope_0000000000000!Nothing").empty());
+
+    std::wstring lnk = g_tmp + L"\\Settings app.lnk";
+    std::wstring ico = ExpandEnv(L"%SystemRoot%\\System32\\shell32.dll");
+    CHECK(CreateAppShortcut(lnk, settings, ico, 21));
+    PinnedShortcut sc;
+    CHECK(ReadShortcut(lnk, sc));
+    CHECK(sc.aumid == settings);            // groups with the running app on the taskbar
+    CHECK(sc.iconIndex == 21 && _wcsicmp(ExpandEnv(sc.iconPath).c_str(), ico.c_str()) == 0);
+    Image img;
+    CHECK(LoadShellItemImage(AppsFolderPath(settings), 64, img) && HasOpaquePixel(img));
+}
+
 static void TestAdjust()
 {
     Image img;
@@ -323,6 +352,7 @@ int wmain()
     TestImportPngUnicodePath();
     TestShortcutIconRoundTrip();
     TestLeftoverDetection();
+    TestPackagedApps();
     TestAdjust();
     TestIconLibraries();
     TestIconLibrariesOnline();

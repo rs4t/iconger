@@ -10,6 +10,8 @@ struct PinnedShortcut {
     std::wstring iconPath;     // Icon location as stored in the .lnk (may contain %VARS%), empty = none
     int          iconIndex = 0;
     bool         onTaskbar = true; // false = leftover file from an earlier pin; editing it does nothing
+    std::wstring aumid;        // AppUserModelID: set on shortcuts to packaged apps
+    bool         packaged = false; // pinned Store/MSIX app with no .lnk (lnkPath empty)
 };
 
 /// %APPDATA%\Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar
@@ -22,6 +24,25 @@ std::vector<PinnedShortcut> EnumeratePinnedShortcuts();
 
 /// True if `lnkFileName` (no folder) appears in the Taskband "Favorites" blob.
 bool BlobMentionsFile(const std::vector<unsigned char>& blob, const std::wstring& lnkFileName);
+
+/// App IDs of packaged apps pinned directly ("Claude_pzs8sxrjxfjjc!Claude"): these pins
+/// have no .lnk file, only an entry in the Taskband blob.
+std::vector<std::wstring> ExtractPinnedAppIds(const std::vector<unsigned char>& blob);
+
+/// "shell:AppsFolder\<aumid>" - the shell item for a packaged app.
+std::wstring AppsFolderPath(const std::wstring& aumid);
+
+/// The app's display name from the shell ("Claude"), or empty.
+std::wstring AppDisplayName(const std::wstring& aumid);
+
+/// Where Iconger keeps shortcuts it makes for packaged apps
+/// (Start menu > Programs > Iconger, so Windows offers "Pin to taskbar" on them).
+std::wstring AppShortcutsFolder();
+
+/// Create a shortcut that launches the packaged app `aumid` with a custom icon. It carries
+/// the same AppUserModelID, so the running window groups with it on the taskbar.
+bool CreateAppShortcut(const std::wstring& lnkPath, const std::wstring& aumid,
+                       const std::wstring& iconPath, int iconIndex);
 
 /// Read one .lnk. Returns false if it cannot be loaded.
 bool ReadShortcut(const std::wstring& lnkPath, PinnedShortcut& out);
