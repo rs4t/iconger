@@ -9,8 +9,10 @@ name: release
 
 on:
   push:
+    # both lists are needed: with only "tags", branch pushes would never start it
+    branches: ["**"]
     tags: ["v*"]
-    paths: [".github/release-notes/**"]
+    paths: [".github/release-notes/**"] # ignored for tag pushes
 
 permissions:
   contents: write
