@@ -519,9 +519,11 @@ void App::DrawSidebar(float width)
     ImGui::PushFont(fonts.bold, fontH2);
     ImGui::TextUnformatted("Iconger");
     ImGui::PopFont();
-    ImGui::SameLine(0, S(8));
-    ImGui::SetCursorPosY(S(16) + (S(30) - S(20)) * 0.5f);
-    ui::Badge("BETA", primary, primarySoft);
+    if (ICONGER_VERSION[0] == '0') { // major version 0 = beta (see CMakeLists.txt)
+        ImGui::SameLine(0, S(8));
+        ImGui::SetCursorPosY(S(16) + (S(30) - S(20)) * 0.5f);
+        ui::Badge("BETA", primary, primarySoft);
+    }
 
     ImGui::SetCursorPosY(S(76));
     struct Item { Page page; const char* icon; const char* label; int badge; };

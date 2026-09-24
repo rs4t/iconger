@@ -45,6 +45,14 @@ iconger.exe --page restore        start on the Restore or Settings page
 
 `F5` reload, `Ctrl+F` search, `Ctrl+O` browse for an icon, `Ctrl+S` apply, `Esc` back.
 
+## Versioning
+
+`MAJOR.MINOR.PATCH`, e.g. `0.2.1`:
+
+- **MAJOR**: `0` while in beta, `1` for the first official release. Bumped again only for rare, huge changes.
+- **MINOR**: updates such as new features and bigger changes.
+- **PATCH**: small updates and fixes.
+
 ## License
 
 MIT. Lucide icons are ISC licensed.

@@ -1,7 +1,11 @@
 cmake_minimum_required(VERSION 3.20)
-project(iconger VERSION 2.1.0 LANGUAGES CXX RC)
-# Shown in the UI and the release tag; project VERSION must stay numeric
-set(ICONGER_VERSION_LABEL "${PROJECT_VERSION}-beta")
+# Versioning: MAJOR.MINOR.PATCH
+#   MAJOR  0 = beta, 1 = first official release, +1 only for rare huge changes
+#   MINOR  updates: new features, changes, semi-big stuff
+#   PATCH  small updates and fixes
+# Release tags are "v" + this, e.g. v0.2.1. The app shows a BETA badge while MAJOR is 0.
+project(iconger VERSION 0.2.1 LANGUAGES CXX RC)
+set(ICONGER_VERSION_LABEL "${PROJECT_VERSION}")
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
