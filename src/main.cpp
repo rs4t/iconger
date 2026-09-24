@@ -76,7 +76,13 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, PWSTR, int nCmdShow)
     // Single instance: focus the running window instead of opening a second one.
     HANDLE mutex = CreateMutexW(nullptr, TRUE, L"Local\\Iconger.SingleInstance");
     if (GetLastError() == ERROR_ALREADY_EXISTS) {
-        if (HWND other = FindWindowW(L"IcongerWindow", nullptr)) {
+        // the other instance may still be starting up and not have its window yet
+        HWND other = FindWindowW(L"IcongerWindow", nullptr);
+        for (int i = 0; i < 30 && !other; ++i) {
+            Sleep(100);
+            other = FindWindowW(L"IcongerWindow", nullptr);
+        }
+        if (other) {
             ShowWindow(other, SW_RESTORE);
             SetForegroundWindow(other);
         }

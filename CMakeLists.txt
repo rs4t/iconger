@@ -89,6 +89,7 @@ target_link_libraries(iconger_core PUBLIC ole32 oleaut32 shell32 shlwapi user32 
 add_executable(iconger WIN32
     src/main.cpp
     src/app.cpp
+    src/library_search.cpp
     src/gfx.cpp
     src/ui/theme.cpp
     src/ui/widgets.cpp

@@ -4,7 +4,7 @@
 #include "icon_adjust.h"
 #include "icon_backup.h"
 #include "job_pool.h"
-#include "online_icons.h"
+#include "library_search.h"
 #include "settings.h"
 #include "shell_link.h"
 #include <windows.h>
@@ -23,7 +23,8 @@ public:
     void SetDpiScale(float scale);
     void Frame();
 
-    /// Command line: --page pinned|restore|settings, --open "<app name>".
+    /// Command line: --page pinned|restore|settings, --open "<app name>", --icon, --adjust.
+    /// Options may come in any order.
     void ApplyCommandLine(int argc, wchar_t** argv);
 
     /// Files dropped on the window (WM_DROPFILES).
@@ -50,17 +51,6 @@ private:
         Texture preview;
         Texture taskbar;       // taskbar-size preview
         explicit operator bool() const { return !path.empty() || !master.empty(); }
-    };
-
-    /// One tile in the icon-library results.
-    struct OnlineTile {
-        LibraryIcon icon;
-        Texture tex;
-        bool loading = true;
-        bool queued = false;
-        bool failed = false;
-        bool duplicate = false; // same picture as an earlier tile (themes often alias one file)
-        uint64_t hash = 0;
     };
 
     /// Icons of one .exe/.dll, extracted a few per frame so big libraries don't freeze the UI.
@@ -118,9 +108,7 @@ private:
                   const std::function<std::string(int)>& tooltip);
 
     // online icon libraries
-    void EnsureIndex();
-    void RunLibrarySearch();
-    void QueueThumbnails();
+    void SearchLibraries();
     void DrawTaskbarPreview(float width);
     void DrawRestorePage();
     void DrawSettingsPage();
@@ -143,16 +131,10 @@ private:
     std::wstring m_fileLib;
     IconGrid m_grid;
 
-    JobPool m_jobs{ 6 };
-    std::shared_ptr<const IconIndex> m_index;
-    bool m_indexLoading = false;
-    std::string m_indexError;
+    JobPool m_jobs{ 6 };               // declared before m_library, which holds a reference to it
+    LibrarySearch m_library{ m_jobs };
     char m_libQuery[128] = {};
-    std::string m_libQueryRan;         // query the current results belong to
     double m_libEditTime = -1;         // last keystroke in the search box (debounce)
-    std::vector<OnlineTile> m_online;
-    uint64_t m_onlineGen = 0;          // bumps when results are replaced; late downloads are dropped
-    int m_thumbsInFlight = 0;
 
     bool m_openConfirm = false;
     bool m_openRestoreAll = false;

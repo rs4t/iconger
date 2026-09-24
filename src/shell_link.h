@@ -37,7 +37,8 @@ std::wstring AppDisplayName(const std::wstring& aumid);
 
 /// Where Iconger keeps shortcuts it makes for packaged apps
 /// (Start menu > Programs > Iconger, so Windows offers "Pin to taskbar" on them).
-std::wstring AppShortcutsFolder();
+/// Created on first use unless `create` is false.
+std::wstring AppShortcutsFolder(bool create = true);
 
 /// Create a shortcut that launches the packaged app `aumid` with a custom icon. It carries
 /// the same AppUserModelID, so the running window groups with it on the taskbar.
@@ -49,6 +50,8 @@ bool ReadShortcut(const std::wstring& lnkPath, PinnedShortcut& out);
 
 /// Point the shortcut's icon at newIconPath,newIconIndex and save it.
 /// An empty newIconPath removes the override so the target's own icon is used.
+/// A path with %VARS% is stored the way installers do (EXP_SZ_ICON block), so
+/// ReadShortcut returns it unchanged.
 bool SetShortcutIcon(const std::wstring& lnkPath, const std::wstring& newIconPath, int newIconIndex);
 
 /// The file the shortcut's icon currently comes from (expanded), plus its index.

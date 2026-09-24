@@ -68,6 +68,21 @@ static bool ReadTaskbandBlob(std::vector<unsigned char>& blob)
     return RegGetValueW(HKEY_CURRENT_USER, key, L"Favorites", RRF_RT_REG_BINARY, nullptr, blob.data(), &size) == ERROR_SUCCESS;
 }
 
+static std::wstring ReadExpIconBlock(const ComPtr<IShellLinkW>& link)
+{
+    ComPtr<IShellLinkDataList> data;
+    DWORD flags = 0;
+    if (FAILED(link.As(&data)) || FAILED(data->GetFlags(&flags)) || !(flags & SLDF_HAS_EXP_ICON_SZ)) return {};
+    void* block = nullptr;
+    std::wstring out;
+    if (SUCCEEDED(data->CopyDataBlock(EXP_SZ_ICON_SIG, &block)) && block) {
+        const auto* exp = static_cast<const EXP_SZ_LINK*>(block);
+        out.assign(exp->swzTarget, wcsnlen(exp->swzTarget, MAX_PATH));
+        LocalFree(block);
+    }
+    return out;
+}
+
 bool ReadShortcut(const std::wstring& lnkPath, PinnedShortcut& sc)
 {
     ComPtr<IShellLinkW> link;
@@ -90,6 +105,11 @@ bool ReadShortcut(const std::wstring& lnkPath, PinnedShortcut& sc)
         sc.iconPath = iconBuf;
         sc.iconIndex = idx;
     }
+    // Installer shortcuts keep the real icon path as "%ProgramFiles%\..." in an
+    // EXP_SZ_ICON block, which wins over the plain location. Report that one, so a
+    // backup restores exactly what was there.
+    std::wstring expIcon = ReadExpIconBlock(link);
+    if (!expIcon.empty()) sc.iconPath = expIcon;
 
     ComPtr<IPropertyStore> props;
     if (SUCCEEDED(link.As(&props))) {
@@ -140,7 +160,7 @@ std::wstring AppDisplayName(const std::wstring& aumid)
     return out;
 }
 
-std::wstring AppShortcutsFolder()
+std::wstring AppShortcutsFolder(bool create)
 {
     std::wstring dir;
     PWSTR programs = nullptr;
@@ -148,7 +168,7 @@ std::wstring AppShortcutsFolder()
     CoTaskMemFree(programs);
     if (dir.empty()) dir = ExpandEnv(L"%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs");
     dir += L"\\Iconger";
-    CreateDirectoryW(dir.c_str(), nullptr);
+    if (create) CreateDirectoryW(dir.c_str(), nullptr);
     return dir;
 }
 
@@ -229,18 +249,31 @@ bool SetShortcutIcon(const std::wstring& lnkPath, const std::wstring& newIconPat
     ComPtr<IPersistFile> file;
     if (!LoadLink(lnkPath, STGM_READWRITE, link, file)) return false;
 
-    if (FAILED(link->SetIconLocation(newIconPath.c_str(), newIconIndex))) return false;
+    // The plain icon location always gets the expanded path. A "%VARS%" path also goes
+    // into an EXP_SZ_ICON block (that is how installers store them, and it wins when
+    // present). Any existing block is dropped first: a stale one would silently keep
+    // the old icon.
+    std::wstring expanded = ExpandEnv(newIconPath);
+    if (FAILED(link->SetIconLocation(expanded.c_str(), newIconIndex))) return false;
 
-    // Installer-made shortcuts often carry an EXP_SZ_ICON block ("%ProgramFiles%\...").
-    // When present it wins over the plain icon location, so a stale one would
-    // silently keep the old icon. Drop it unless the new path itself uses %VARS%.
     ComPtr<IShellLinkDataList> data;
-    if (SUCCEEDED(link.As(&data)) && newIconPath.find(L'%') == std::wstring::npos) {
-        DWORD flags = 0;
-        if (SUCCEEDED(data->GetFlags(&flags)) && (flags & SLDF_HAS_EXP_ICON_SZ)) {
+    DWORD flags = 0;
+    if (SUCCEEDED(link.As(&data)) && SUCCEEDED(data->GetFlags(&flags))) {
+        const DWORD oldFlags = flags;
+        if (flags & SLDF_HAS_EXP_ICON_SZ) {
             data->RemoveDataBlock(EXP_SZ_ICON_SIG);
-            data->SetFlags(flags & ~SLDF_HAS_EXP_ICON_SZ);
+            flags &= ~SLDF_HAS_EXP_ICON_SZ;
         }
+        if (newIconPath.find(L'%') != std::wstring::npos && newIconPath.size() < MAX_PATH) {
+            EXP_SZ_LINK exp = {};
+            exp.cbSize = sizeof(exp);
+            exp.dwSignature = EXP_SZ_ICON_SIG;
+            wcsncpy_s(exp.swzTarget, newIconPath.c_str(), _TRUNCATE);
+            WideCharToMultiByte(CP_ACP, 0, newIconPath.c_str(), -1, exp.szTarget, MAX_PATH, nullptr, nullptr);
+            if (SUCCEEDED(data->AddDataBlock(&exp))) flags |= SLDF_HAS_EXP_ICON_SZ;
+            else link->SetIconLocation(newIconPath.c_str(), newIconIndex); // no block support: keep the text as is
+        }
+        if (flags != oldFlags) data->SetFlags(flags);
     }
 
     if (FAILED(file->Save(lnkPath.c_str(), TRUE))) return false;

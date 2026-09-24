@@ -94,8 +94,26 @@ void IconFrame(const Texture& tex, float size, const char* caption, bool highlig
     ImGui::EndGroup();
 }
 
+std::wstring SafeFileName(std::wstring name)
+{
+    for (auto& c : name)
+        if (wcschr(L"<>:\"/\\|?*", c) || c < 32) c = L'_';
+    return name;
+}
+
 // Shell item to ask for a pin's icon: the .lnk, or the packaged app itself.
 std::wstring ShellPath(const PinnedShortcut& sc) { return sc.packaged ? AppsFolderPath(sc.aumid) : sc.lnkPath; }
+
+// The shortcut Iconger made for a packaged app that this pin was created from
+// (same name, same app ID), or empty.
+std::wstring IcongerAppShortcut(const PinnedShortcut& sc)
+{
+    if (sc.packaged || sc.aumid.empty() || sc.lnkPath.empty()) return {};
+    std::wstring ours = AppShortcutsFolder(false) + L"\\" + SafeFileName(sc.displayName) + L".lnk";
+    PinnedShortcut made;
+    if (!ReadShortcut(ours, made) || _wcsicmp(made.aumid.c_str(), sc.aumid.c_str()) != 0) return {};
+    return ours;
+}
 
 // Stable identity of a pin across reloads.
 std::wstring EntryKey(const PinnedShortcut& sc) { return sc.packaged ? sc.aumid : sc.lnkPath; }
@@ -135,8 +153,7 @@ void App::Shutdown()
     m_cand = Candidate();
     m_adjust = IconAdjust();
     m_grid.Clear();
-    m_online.clear();
-    ++m_onlineGen;
+    m_library.Clear();
 }
 
 void App::SetDpiScale(float scale)
@@ -151,8 +168,7 @@ void App::SetDpiScale(float scale)
         RefreshCandidatePreview();
     }
     if (!m_grid.path.empty()) m_grid.Open(m_grid.path);
-    m_libQueryRan.clear(); // thumbnails too
-    RunLibrarySearch();
+    // library thumbnails re-render on their own: LibrarySearch::Pump sees the new size
 }
 
 Texture App::LoadEntryIcon(const PinnedShortcut& sc, float px) const
@@ -173,12 +189,21 @@ void App::Reload()
 {
     std::wstring keepLnk = m_editing >= 0 ? EntryKey(m_entries[m_editing].sc) : L"";
     m_entries.clear();
+    bool backupChanged = false;
     for (auto& sc : EnumeratePinnedShortcuts()) {
+        // A pin made from one of our packaged-app shortcuts started out as the app's own
+        // icon. Remember that, so Restore can give it back like for any other pin.
+        // (Only while it has a custom icon: once restored, it has none.)
+        if (!sc.iconPath.empty() && !m_backup.Has(sc.lnkPath) && !IcongerAppShortcut(sc).empty()) {
+            m_backup.RecordIfMissing(sc.lnkPath, IconBackupEntry{ L"", 0 });
+            backupChanged = true;
+        }
         Entry e;
         e.sc = std::move(sc);
         e.icon = LoadEntryIcon(e.sc, S(40));
         m_entries.push_back(std::move(e));
     }
+    if (backupChanged) m_backup.Save();
     m_editing = -1;
     if (!keepLnk.empty()) {
         for (int i = 0; i < (int)m_entries.size(); ++i)
@@ -219,11 +244,10 @@ void App::OpenEditor(int index)
     bool ownIcons = !sc.targetPath.empty() && CountIcons(sc.targetPath) > 1;
     m_tab = ownIcons || m_settings.onlineLibraries ? SourceTab::ThisApp : SourceTab::File;
     strncpy_s(m_libQuery, WideToUtf8(sc.displayName).c_str(), _TRUNCATE);
-    m_libQueryRan.clear();
-    m_online.clear();
-    ++m_onlineGen;
-    EnsureIndex();
-    RunLibrarySearch();
+    m_libEditTime = -1;
+    m_library.Clear();
+    if (m_settings.onlineLibraries) m_library.EnsureIndex();
+    SearchLibraries();
 }
 
 void App::CloseEditor()
@@ -233,8 +257,7 @@ void App::CloseEditor()
     m_cand = Candidate();
     m_adjust = IconAdjust();
     m_grid.Clear();
-    m_online.clear();
-    ++m_onlineGen;
+    m_library.Clear();
 }
 
 void App::SetCandidate(const std::wstring& path, int index, const std::string& label)
@@ -332,29 +355,38 @@ void App::HandlePickedFile(const std::wstring& path)
 
 void App::ApplyCommandLine(int argc, wchar_t** argv)
 {
-    for (int i = 1; i + 1 < argc; ++i) {
+    // Collect first, then act in dependency order (--icon needs the editor from --open,
+    // --adjust needs the icon), so the options work in any order.
+    std::wstring page, open, icon, adjust;
+    for (int i = 1; i + 1 < argc; i += 2) {
         std::wstring arg = argv[i], val = argv[i + 1];
-        if (arg == L"--page") {
-            m_page = val == L"restore" ? Page::Restore : val == L"settings" ? Page::Settings : Page::Pinned;
-            ++i;
-        } else if (arg == L"--open") {
-            // prefer the live pin over a leftover copy with the same name
-            for (int pass = 0; pass < 2 && m_editing < 0; ++pass)
-                for (int j = 0; j < (int)m_entries.size(); ++j)
-                    if (m_entries[j].sc.onTaskbar == (pass == 0) &&
-                        _wcsicmp(m_entries[j].sc.displayName.c_str(), val.c_str()) == 0) { OpenEditor(j); break; }
-            ++i;
-        } else if (arg == L"--icon" && m_editing >= 0 && val == L"current") {
+        if (arg == L"--page") page = val;
+        else if (arg == L"--open") open = val;
+        else if (arg == L"--icon") icon = val;
+        else if (arg == L"--adjust") adjust = val;
+        else --i; // unknown flag: its "value" may be the next flag
+    }
+
+    if (!page.empty())
+        m_page = page == L"restore" ? Page::Restore : page == L"settings" ? Page::Settings : Page::Pinned;
+    if (!open.empty()) {
+        // prefer the live pin over a leftover copy with the same name
+        for (int pass = 0; pass < 2 && m_editing < 0; ++pass)
+            for (int j = 0; j < (int)m_entries.size(); ++j)
+                if (m_entries[j].sc.onTaskbar == (pass == 0) &&
+                    _wcsicmp(m_entries[j].sc.displayName.c_str(), open.c_str()) == 0) { OpenEditor(j); break; }
+    }
+    if (!icon.empty() && m_editing >= 0) {
+        if (icon == L"current") {
             CustomizeCurrentIcon(); // same as the "Customize current icon" button
-            ++i;
-        } else if (arg == L"--icon" && m_editing >= 0) {
+        } else {
             // "file" or "file.exe,index": preview it, nothing is applied
-            size_t comma = val.rfind(L',');
-            bool hasIndex = comma != std::wstring::npos && comma + 1 < val.size() &&
-                            val.find_first_not_of(L"0123456789", comma + 1) == std::wstring::npos;
-            std::wstring file = ExpandEnv(hasIndex ? val.substr(0, comma) : val);
+            size_t comma = icon.rfind(L',');
+            bool hasIndex = comma != std::wstring::npos && comma + 1 < icon.size() &&
+                            icon.find_first_not_of(L"0123456789", comma + 1) == std::wstring::npos;
+            std::wstring file = ExpandEnv(hasIndex ? icon.substr(0, comma) : icon);
             if (hasIndex && ClassifyIconSource(file) == IconSourceKind::IconLibrary) {
-                int index = _wtoi(val.c_str() + comma + 1);
+                int index = _wtoi(icon.c_str() + comma + 1);
                 bool own = _wcsicmp(file.c_str(), m_entries[m_editing].sc.targetPath.c_str()) == 0;
                 m_tab = own ? SourceTab::ThisApp : SourceTab::File;
                 if (!own) m_fileLib = file;
@@ -362,29 +394,28 @@ void App::ApplyCommandLine(int argc, wchar_t** argv)
             } else {
                 HandlePickedFile(file);
             }
-            ++i;
-        } else if (arg == L"--adjust" && m_cand) {
-            // "hue=40,saturation=140,brightness=-10,contrast=110,tint=50"
-            std::string spec = WideToUtf8(val);
-            for (size_t pos = 0; pos < spec.size();) {
-                size_t end = spec.find_first_of(", ", pos);
-                if (end == std::string::npos) end = spec.size();
-                std::string kv = spec.substr(pos, end - pos);
-                size_t eq = kv.find('=');
-                if (eq != std::string::npos) {
-                    std::string k = kv.substr(0, eq);
-                    float v = (float)atof(kv.c_str() + eq + 1);
-                    if (k == "hue") m_adjust.hue = std::clamp(v, -180.0f, 180.0f);
-                    else if (k == "saturation") m_adjust.saturation = std::clamp(v, 0.0f, 200.0f);
-                    else if (k == "brightness") m_adjust.brightness = std::clamp(v, -100.0f, 100.0f);
-                    else if (k == "contrast") m_adjust.contrast = std::clamp(v, 0.0f, 200.0f);
-                    else if (k == "tint") m_adjust.tintAmount = std::clamp(v, 0.0f, 100.0f);
-                }
-                pos = end + 1;
-            }
-            RefreshCandidatePreview();
-            ++i;
         }
+    }
+    if (!adjust.empty() && m_cand) {
+        // "hue=40,saturation=140,brightness=-10,contrast=110,tint=50"
+        std::string spec = WideToUtf8(adjust);
+        for (size_t pos = 0; pos < spec.size();) {
+            size_t end = spec.find_first_of(", ", pos);
+            if (end == std::string::npos) end = spec.size();
+            std::string kv = spec.substr(pos, end - pos);
+            size_t eq = kv.find('=');
+            if (eq != std::string::npos) {
+                std::string k = kv.substr(0, eq);
+                float v = (float)atof(kv.c_str() + eq + 1);
+                if (k == "hue") m_adjust.hue = std::clamp(v, -180.0f, 180.0f);
+                else if (k == "saturation") m_adjust.saturation = std::clamp(v, 0.0f, 200.0f);
+                else if (k == "brightness") m_adjust.brightness = std::clamp(v, -100.0f, 100.0f);
+                else if (k == "contrast") m_adjust.contrast = std::clamp(v, 0.0f, 200.0f);
+                else if (k == "tint") m_adjust.tintAmount = std::clamp(v, 0.0f, 100.0f);
+            }
+            pos = end + 1;
+        }
+        RefreshCandidatePreview();
     }
 }
 
@@ -429,11 +460,15 @@ void App::ApplyCandidate()
     Entry& e = m_entries[m_editing];
     IconBackupEntry original{ e.sc.iconPath, e.sc.iconIndex };
 
-    // An untouched icon inside a file is referenced directly. Anything adjusted or
-    // downloaded becomes a multi-size .ico of its own in the Iconger icons folder.
+    // Every icon becomes a multi-size .ico of its own in the Iconger icons folder, so it
+    // keeps working when the source is deleted or an update moves or renumbers the
+    // icons of an .exe/.dll. Files that are already there (imports) are used as they are.
     std::wstring iconPath = m_cand.path;
     int iconIndex = m_cand.index;
-    if (m_cand.path.empty() || !m_adjust.IsIdentity()) {
+    std::wstring iconsDir = IconsDir() + L"\\";
+    bool stable = !m_cand.path.empty() && m_adjust.IsIdentity() &&
+                  _wcsnicmp(m_cand.path.c_str(), iconsDir.c_str(), iconsDir.size()) == 0;
+    if (!stable) {
         std::vector<Image> sizes;
         for (int sz : { 256, 128, 64, 48, 32, 24, 16 }) {
             Image img = CandidateImage(sz);
@@ -486,10 +521,7 @@ void App::ApplyToPackagedApp(const std::wstring& iconPath, int iconIndex)
     // groups with the pin) with our icon, which the user pins in place of the original.
     // Windows 11 has no API to pin for them, hence the guide.
     const PinnedShortcut& sc = m_entries[m_editing].sc;
-    std::wstring name = sc.displayName;
-    for (auto& c : name)
-        if (wcschr(L"<>:\"/\\|?*", c) || c < 32) c = L'_';
-    std::wstring lnk = AppShortcutsFolder() + L"\\" + name + L".lnk";
+    std::wstring lnk = AppShortcutsFolder() + L"\\" + SafeFileName(sc.displayName) + L".lnk";
     if (!CreateAppShortcut(lnk, sc.aumid, iconPath, iconIndex)) {
         ui::Toast(ui::ToastKind::Error, "Couldn't create the shortcut for " + U8(sc.displayName) + ".");
         return;
@@ -514,6 +546,12 @@ void App::RestoreOriginal(const std::wstring& lnkPath, bool quiet)
     if (FileExists(lnkPath) && !SetShortcutIcon(lnkPath, path, index)) {
         ui::Toast(ui::ToastKind::Error, "Couldn't restore " + name + ".");
         return;
+    }
+    // A packaged app's pin: the Start menu shortcut it came from goes back too.
+    for (const auto& e : m_entries) {
+        if (_wcsicmp(e.sc.lnkPath.c_str(), lnkPath.c_str()) != 0) continue;
+        std::wstring ours = IcongerAppShortcut(e.sc);
+        if (!ours.empty()) SetShortcutIcon(ours, L"", 0);
     }
     m_backup.Remove(lnkPath);
     m_backup.Save();
@@ -617,7 +655,11 @@ void App::Frame()
 {
     PollRestart();
     m_jobs.RunCompleted();
-    QueueThumbnails();
+    if (m_libEditTime >= 0 && ImGui::GetTime() - m_libEditTime > 0.35) { // debounce typing
+        m_libEditTime = -1;
+        SearchLibraries();
+    }
+    m_library.Pump((int)std::lround(S(40)));
     HandleShortcuts();
 
     const ImGuiViewport* vp = ImGui::GetMainViewport();
@@ -1208,82 +1250,14 @@ void App::DrawSourceCard()
 // "This app": built-in icons + online icon libraries
 // ============================================================================
 
-void App::EnsureIndex()
+void App::SearchLibraries()
 {
-    if (!m_settings.onlineLibraries || m_index || m_indexLoading) return;
-    m_indexLoading = true;
-    m_indexError.clear();
-    m_jobs.Submit([this]() -> JobPool::Done {
-        auto index = std::make_shared<IconIndex>();
-        std::string err;
-        bool ok = index->Load(err);
-        return [this, index, ok, err] {
-            m_indexLoading = false;
-            if (ok) m_index = index;
-            else m_indexError = err;
-            m_libQueryRan.clear();
-            RunLibrarySearch();
-        };
-    });
-}
-
-void App::RunLibrarySearch()
-{
-    if (m_editing < 0 || !m_index || !m_settings.onlineLibraries) return;
-    std::string q = m_libQuery;
-    if (q == m_libQueryRan) return;
-    m_libQueryRan = q;
-
-    std::vector<std::string> queries = { q };
+    if (m_editing < 0 || !m_settings.onlineLibraries) return;
+    std::vector<std::string> queries = { m_libQuery };
     // for the default query also try the exe name ("Code.exe" for Visual Studio Code)
     const PinnedShortcut& sc = m_entries[m_editing].sc;
-    if (q == U8(sc.displayName) && !sc.targetPath.empty()) queries.push_back(U8(FileStem(sc.targetPath)));
-
-    ++m_onlineGen; // results still downloading for the old query are dropped
-    m_thumbsInFlight = 0;
-    m_online.clear();
-    for (auto& hit : m_index->Search(queries, 36)) {
-        OnlineTile t;
-        t.icon = std::move(hit);
-        m_online.push_back(std::move(t));
-    }
-    QueueThumbnails();
-}
-
-void App::QueueThumbnails()
-{
-    // debounce typing in the search box
-    if (m_libEditTime >= 0 && ImGui::GetTime() - m_libEditTime > 0.35) {
-        m_libEditTime = -1;
-        RunLibrarySearch();
-    }
-    const int size = (int)std::lround(S(40));
-    for (size_t i = 0; i < m_online.size() && m_thumbsInFlight < 8; ++i) {
-        OnlineTile& t = m_online[i];
-        if (!t.loading || t.queued) continue;
-        t.queued = true;
-        ++m_thumbsInFlight;
-        m_jobs.Submit([this, gen = m_onlineGen, i, icon = t.icon, size]() -> JobPool::Done {
-            Image img;
-            std::string err;
-            bool ok = FetchLibraryIcon(icon, size, img, err);
-            return [this, gen, i, ok, img] {
-                if (gen != m_onlineGen || i >= m_online.size()) return;
-                --m_thumbsInFlight;
-                OnlineTile& tile = m_online[i];
-                tile.loading = false;
-                tile.failed = !ok;
-                if (!ok) return;
-                uint64_t h = 1469598103934665603ull;
-                for (uint8_t b : img.rgba) { h ^= b; h *= 1099511628211ull; }
-                tile.hash = h;
-                for (size_t k = 0; k < m_online.size(); ++k)
-                    if (k != i && !m_online[k].loading && m_online[k].hash == h && !m_online[k].duplicate)
-                        tile.duplicate = true;
-                if (!tile.duplicate) tile.tex = Texture(img);
-            };
-        });
-    }
+    if (queries[0] == U8(sc.displayName) && !sc.targetPath.empty()) queries.push_back(U8(FileStem(sc.targetPath)));
+    m_library.Search(queries);
 }
 
 int App::DrawTiles(const char* id, int count, const std::function<const Texture*(int)>& tex,
@@ -1373,36 +1347,37 @@ void App::DrawThisAppTab(float height)
             m_libEditTime = ImGui::GetTime();
         ImGui::Dummy(ImVec2(0, S(2)));
 
-        if (m_indexLoading) {
+        const auto& tiles = m_library.Tiles();
+        if (m_library.IndexLoading()) {
             ui::Spinner(S(18), primary);
             ImGui::SameLine();
             ImGui::PushStyleColor(ImGuiCol_Text, textSecondary);
             ImGui::TextUnformatted("Loading icon libraries...");
             ImGui::PopStyleColor();
-        } else if (!m_index) {
+        } else if (!m_library.HasIndex()) {
             ImGui::PushStyleColor(ImGuiCol_Text, textSecondary);
-            ImGui::TextWrapped("Couldn't load the icon libraries (%s). Check your internet connection.", m_indexError.c_str());
+            ImGui::TextWrapped("Couldn't load the icon libraries (%s). Check your internet connection.", m_library.IndexError().c_str());
             ImGui::PopStyleColor();
-            if (ui::Button("Try again", ICON_REFRESH, ui::ButtonKind::Secondary)) EnsureIndex();
-        } else if (std::none_of(m_online.begin(), m_online.end(), [](const OnlineTile& t) { return t.loading || (!t.failed && !t.duplicate); })) {
+            if (ui::Button("Try again", ICON_REFRESH, ui::ButtonKind::Secondary)) m_library.EnsureIndex();
+        } else if (m_library.NothingToShow()) {
             ImGui::PushStyleColor(ImGuiCol_Text, textSecondary);
             ImGui::TextWrapped("No icons match \"%s\". Try a shorter name, or a word like \"notes\" or \"music\".", m_libQuery);
             ImGui::PopStyleColor();
         } else {
             std::vector<int> shown; // failed downloads and repeats of the same picture are hidden
-            for (int i = 0; i < (int)m_online.size(); ++i)
-                if (!m_online[i].failed && !m_online[i].duplicate) shown.push_back(i);
+            for (int i = 0; i < (int)tiles.size(); ++i)
+                if (!tiles[i].failed && !tiles[i].duplicate) shown.push_back(i);
             int hit = DrawTiles("online", (int)shown.size(),
-                [&](int k) -> const Texture* { return &m_online[shown[k]].tex; },
-                [&](int k) { return m_cand && m_cand.path.empty() && m_cand.id == m_online[shown[k]].icon.Id(); },
-                [&](int k) { return m_online[shown[k]].loading; },
+                [&](int k) -> const Texture* { return &tiles[shown[k]].tex; },
+                [&](int k) { return m_cand && m_cand.path.empty() && m_cand.id == tiles[shown[k]].icon.Id(); },
+                [&](int k) { return tiles[shown[k]].loading; },
                 [&](int k) {
-                    const LibraryIcon& ic = m_online[shown[k]].icon;
+                    const LibraryIcon& ic = tiles[shown[k]].icon;
                     return std::string(LibraryName(ic.lib)) + ": " + (ic.title.empty() ? ic.name : ic.title);
                 });
             if (hit >= 0) {
                 // the file is cached by now, so a full-size render is quick
-                const LibraryIcon& ic = m_online[shown[hit]].icon;
+                const LibraryIcon& ic = tiles[shown[hit]].icon;
                 Image master;
                 std::string err;
                 if (FetchLibraryIcon(ic, 256, master, err))
@@ -1608,7 +1583,7 @@ void App::DrawSettingsPage()
     if (ui::SettingRow("Search online icon libraries",
                        "Turn off to keep Iconger fully offline.", &m_settings.onlineLibraries)) {
         m_settings.Save();
-        if (m_settings.onlineLibraries) EnsureIndex();
+        if (m_settings.onlineLibraries) { m_library.EnsureIndex(); SearchLibraries(); }
     }
     if (ui::Button("Clear downloaded icons", ICON_TRASH, ui::ButtonKind::Secondary)) {
         // only the download cache; applied icons live in the icons folder and stay put
@@ -1620,10 +1595,8 @@ void App::DrawSettingsPage()
             do { if (DeleteFileW((dir + L"\\" + ffd.cFileName).c_str())) ++n; } while (FindNextFileW(h, &ffd));
             FindClose(h);
         }
-        m_index.reset();
-        m_online.clear();
-        m_libQueryRan.clear();
-        ++m_onlineGen;
+        m_library.Reset();
+        if (m_settings.onlineLibraries && m_editing >= 0) { m_library.EnsureIndex(); SearchLibraries(); }
         ui::Toast(ui::ToastKind::Success, "Cleared " + std::to_string(n) + " downloaded file(s).");
     }
     ui::Tooltip("Icons you already applied are kept.");
@@ -1774,7 +1747,8 @@ void App::DrawModals()
                            "Pin to taskbar. Or use the folder below: right-click the shortcut, Show more options, "
                            "Pin to taskbar.", m_pinGuideName.c_str());
         ImGui::PushStyleColor(ImGuiCol_Text, textSecondary);
-        ImGui::TextWrapped("After that it behaves like any other pin: change its icon again here any time, no re-pinning needed.");
+        ImGui::TextWrapped("After that it behaves like any other pin: change its icon again here any time, no re-pinning "
+                           "needed, and Restore gives it the app's own icon back.");
         ImGui::PopStyleColor();
         ImGui::PopTextWrapPos();
         ImGui::Dummy(ImVec2(0, S(4)));

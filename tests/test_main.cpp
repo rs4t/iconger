@@ -120,6 +120,15 @@ static void TestShortcutIconRoundTrip()
     CHECK(ReadShortcut(lnk, sc));
     CHECK(_wcsicmp(ExpandEnv(sc.iconPath).c_str(), newIcon.c_str()) == 0);
     CHECK(sc.iconIndex == 5);
+    CHECK(!(LinkFlags(lnk) & SLDF_HAS_EXP_ICON_SZ)); // a plain path drops the %VARS% block
+
+    // restoring a backed-up "%VARS%" path gives back exactly that text, not its expansion
+    CHECK(SetShortcutIcon(lnk, envIcon, 12));
+    CHECK(ReadShortcut(lnk, sc));
+    CHECK(sc.iconPath == envIcon && sc.iconIndex == 12);
+    CHECK(LinkFlags(lnk) & SLDF_HAS_EXP_ICON_SZ);
+    CHECK(SetShortcutIcon(lnk, newIcon, 5));
+    CHECK(ReadShortcut(lnk, sc));
 
     std::wstring resolved; int idx = -1;
     ResolveShortcutIcon(sc, resolved, idx);
