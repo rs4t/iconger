@@ -6,7 +6,7 @@ Change the icons of the apps pinned to your Windows 10/11 taskbar.
 
 ![Iconger's icon editor](assets/screenshot.png)
 
-- Pick from the app's own alternative icons, Windows' built-in icon libraries, or your own `.png` / `.jpg` / `.ico` / `.exe` / `.dll` (drag and drop works).
+- Pick from the app's own alternative icons, or your own `.png` / `.jpg` / `.ico` / `.exe` / `.dll` (drag and drop works).
 - Images are padded to a square and saved as a multi-size `.ico` (16-256 px) in `%LOCALAPPDATA%\Iconger\icons`, so they stay sharp and keep working after you delete the original.
 - Every original icon is backed up before the first change. Restore one app or all of them from the Restore page.
 - Finds the "leftover" shortcuts Windows leaves behind when you re-pin an app (`App.lnk` next to `App (2).lnk`). Editing those does nothing, so Iconger shows which one the taskbar actually uses.
@@ -37,8 +37,10 @@ The app icon is generated: edit `assets/make_icon.py` and run `python assets/mak
 ## Command line
 
 ```
-iconger.exe --open "Firefox"      open the icon editor for a pinned app
-iconger.exe --page restore        start on the Restore or Settings page
+iconger.exe --open "Firefox"                        open the icon editor for a pinned app
+iconger.exe --open "Firefox" --icon "C:\iconsox.png"  ...with that icon already previewed (not applied)
+iconger.exe --open "Firefox" --icon "firefox.exe,14"  ...or icon #14 of an .exe/.dll
+iconger.exe --page restore                          start on the Restore or Settings page
 ```
 
 ## Keyboard

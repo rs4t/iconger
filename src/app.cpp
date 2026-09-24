@@ -17,16 +17,6 @@ using Microsoft::WRL::ComPtr;
 
 namespace {
 
-struct WindowsLibrary { const char* label; const wchar_t* file; };
-const WindowsLibrary kWindowsLibraries[] = {
-    { "Modern",  L"%SystemRoot%\\System32\\imageres.dll" },
-    { "Classic", L"%SystemRoot%\\System32\\shell32.dll" },
-    { "Devices", L"%SystemRoot%\\System32\\ddores.dll" },
-    { "Media",   L"%SystemRoot%\\System32\\mmres.dll" },
-    { "Retro",   L"%SystemRoot%\\System32\\pifmgr.dll" },
-    { "DOS era", L"%SystemRoot%\\System32\\moricons.dll" },
-};
-
 constexpr const char* kRepoUrl = "https://github.com/rs4t/iconger";
 
 std::string U8(const std::wstring& w) { return WideToUtf8(w); }
@@ -210,7 +200,7 @@ void App::OpenEditor(int index)
     m_grid.Clear();
     // Start on the app's own icon set when it ships alternatives (Chrome, VS Code, ...)
     const auto& sc = m_entries[index].sc;
-    m_tab = !sc.targetPath.empty() && CountIcons(sc.targetPath) > 1 ? SourceTab::ThisApp : SourceTab::Windows;
+    m_tab = !sc.targetPath.empty() && CountIcons(sc.targetPath) > 1 ? SourceTab::ThisApp : SourceTab::File;
 }
 
 void App::CloseEditor()
@@ -275,6 +265,22 @@ void App::ApplyCommandLine(int argc, wchar_t** argv)
                 for (int j = 0; j < (int)m_entries.size(); ++j)
                     if (m_entries[j].sc.onTaskbar == (pass == 0) &&
                         _wcsicmp(m_entries[j].sc.displayName.c_str(), val.c_str()) == 0) { OpenEditor(j); break; }
+            ++i;
+        } else if (arg == L"--icon" && m_editing >= 0) {
+            // "file" or "file.exe,index": preview it, nothing is applied
+            size_t comma = val.rfind(L',');
+            bool hasIndex = comma != std::wstring::npos && comma + 1 < val.size() &&
+                            val.find_first_not_of(L"0123456789", comma + 1) == std::wstring::npos;
+            std::wstring file = ExpandEnv(hasIndex ? val.substr(0, comma) : val);
+            if (hasIndex && ClassifyIconSource(file) == IconSourceKind::IconLibrary) {
+                int index = _wtoi(val.c_str() + comma + 1);
+                bool own = _wcsicmp(file.c_str(), m_entries[m_editing].sc.targetPath.c_str()) == 0;
+                m_tab = own ? SourceTab::ThisApp : SourceTab::File;
+                if (!own) m_fileLib = file;
+                SetCandidate(file, index, U8(FileStem(file)) + " #" + std::to_string(index));
+            } else {
+                HandlePickedFile(file);
+            }
             ++i;
         }
     }
@@ -871,15 +877,15 @@ void App::DrawSourceCard()
     struct Tab { SourceTab tab; const char* icon; const char* label; };
     const Tab tabs[] = {
         { SourceTab::ThisApp, ICON_APP_WINDOW, "This app" },
-        { SourceTab::Windows, ICON_LAYOUT_GRID, "Windows icons" },
         { SourceTab::File,    ICON_UPLOAD,      "From a file" },
     };
     ImVec2 segP = ImGui::GetCursorScreenPos();
     float segW = ImGui::GetContentRegionAvail().x, segH = S(38);
     ImDrawList* dl = ImGui::GetWindowDrawList();
     dl->AddRectFilled(segP, ImVec2(segP.x + segW, segP.y + segH), bg, S(10));
-    float tabW = (segW - S(8)) / 3;
-    for (int i = 0; i < 3; ++i) {
+    const int tabCount = (int)std::size(tabs);
+    float tabW = (segW - S(8)) / tabCount;
+    for (int i = 0; i < tabCount; ++i) {
         ImGui::SetCursorScreenPos(ImVec2(segP.x + S(4) + tabW * i, segP.y + S(4)));
         bool active = m_tab == tabs[i].tab;
         ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, S(7));
@@ -900,22 +906,10 @@ void App::DrawSourceCard()
             ImGui::PopStyleColor();
         } else {
             ImGui::PushStyleColor(ImGuiCol_Text, textSecondary);
-            ImGui::TextWrapped("This app has no icons of its own to choose from. Try Windows icons, or use your own image.");
+            ImGui::TextWrapped("This app has no icons of its own to choose from. Use your own image under \"From a file\".");
             ImGui::PopStyleColor();
         }
         break;
-    case SourceTab::Windows: {
-        for (int i = 0; i < (int)std::size(kWindowsLibraries); ++i) {
-            if (i) ImGui::SameLine(0, S(6));
-            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(S(12), S(5)));
-            if (ui::Button(kWindowsLibraries[i].label, nullptr,
-                           m_windowsLib == i ? ui::ButtonKind::Outline : ui::ButtonKind::Secondary))
-                m_windowsLib = i;
-            ImGui::PopStyleVar();
-        }
-        wantGrid = ExpandEnv(kWindowsLibraries[m_windowsLib].file);
-        break;
-    }
     case SourceTab::File: {
         // drop zone
         ImVec2 zp = ImGui::GetCursorScreenPos();

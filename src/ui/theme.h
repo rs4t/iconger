@@ -82,7 +82,6 @@ inline float S(float px) { return px * Scale(); }
 #define ICON_APP_WINDOW     "\uE426"
 #define ICON_PACKAGE        "\uE129"
 #define ICON_POWER          "\uE140"
-#define ICON_LAYOUT_GRID    "\uE0FF"
 #define ICON_CHEVRON_RIGHT  "\uE06F"
 #define ICON_CODE           "\uE206"
 #define ICON_ROTATE_CCW     "\uE148"

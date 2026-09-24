@@ -54,7 +54,7 @@ private:
     };
 
     enum class Page { Pinned, Restore, Settings };
-    enum class SourceTab { ThisApp, Windows, File };
+    enum class SourceTab { ThisApp, File };
 
     // data
     void Reload();
@@ -102,7 +102,6 @@ private:
     Texture m_editingPreview;
     Candidate m_cand;
     SourceTab m_tab = SourceTab::ThisApp;
-    int m_windowsLib = 0;
     std::wstring m_fileLib;
     IconGrid m_grid;
 
