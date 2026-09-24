@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(iconger VERSION 2.0.0 LANGUAGES CXX RC)
+project(iconger VERSION 2.1.0 LANGUAGES CXX RC)
 # Shown in the UI and the release tag; project VERSION must stay numeric
 set(ICONGER_VERSION_LABEL "${PROJECT_VERSION}-beta")
 

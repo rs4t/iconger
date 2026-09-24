@@ -22,7 +22,7 @@ static void StyleTitleBar(HWND hwnd)
 {
     BOOL dark = TRUE;
     DwmSetWindowAttribute(hwnd, 20 /*DWMWA_USE_IMMERSIVE_DARK_MODE*/, &dark, sizeof(dark));
-    COLORREF caption = RGB(12, 18, 31), textCol = RGB(240, 244, 248);
+    COLORREF caption = theme::bgColorRef, textCol = RGB(245, 241, 247);
     DwmSetWindowAttribute(hwnd, 35 /*DWMWA_CAPTION_COLOR*/, &caption, sizeof(caption));
     DwmSetWindowAttribute(hwnd, 36 /*DWMWA_TEXT_COLOR*/, &textCol, sizeof(textCol));
 }
@@ -90,7 +90,7 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, PWSTR, int nCmdShow)
     wc.lpfnWndProc = WndProc;
     wc.hInstance = hInst;
     wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-    wc.hbrBackground = CreateSolidBrush(RGB(12, 18, 31)); // no white flash before the first frame
+    wc.hbrBackground = CreateSolidBrush(theme::bgColorRef); // no white flash before the first frame
     wc.lpszClassName = L"IcongerWindow";
     wc.hIcon = LoadIconW(hInst, MAKEINTRESOURCEW(1));
     RegisterClassExW(&wc);
@@ -160,7 +160,7 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, PWSTR, int nCmdShow)
         g_app.Frame();
         ImGui::Render();
 
-        static const float clear[4] = { 12 / 255.f, 18 / 255.f, 31 / 255.f, 1 };
+        static const float clear[4] = { 17 / 255.f, 15 / 255.f, 20 / 255.f, 1 };
         GfxRender(clear);
         if (!GfxPresent()) Sleep(50);
 

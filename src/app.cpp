@@ -464,13 +464,13 @@ void App::Frame()
     float sidebarW = S(212);
     DrawSidebar(sidebarW);
 
-    // Content panel: rounded top-left corner + hairline border, like Sparkle.
+    // Content panel: rounded top-left corner + hairline border.
     ImVec2 wp = ImGui::GetWindowPos();
     ImVec2 ws = ImGui::GetWindowSize();
     ImVec2 c0(wp.x + sidebarW, wp.y + S(8));
     ImDrawList* dl = ImGui::GetWindowDrawList();
     float r = S(14);
-    dl->AddRectFilled(c0, ImVec2(wp.x + ws.x + r, wp.y + ws.y + r), IM_COL32(14, 21, 35, 255), r, ImDrawFlags_RoundCornersTopLeft);
+    dl->AddRectFilled(c0, ImVec2(wp.x + ws.x + r, wp.y + ws.y + r), panel, r, ImDrawFlags_RoundCornersTopLeft);
     dl->AddRect(c0, ImVec2(wp.x + ws.x + r, wp.y + ws.y + r), border, r, S(1), ImDrawFlags_RoundCornersTopLeft);
 
     ImGui::SetCursorScreenPos(ImVec2(c0.x + S(1), c0.y + S(1)));
@@ -512,19 +512,16 @@ void App::HandleShortcuts()
 
 void App::DrawSidebar(float width)
 {
-    ImGui::SetCursorPos(ImVec2(S(20), S(18)));
-    ImGui::PushStyleColor(ImGuiCol_Text, primary);
-    ImGui::PushFont(nullptr, fontH2);
-    ImGui::TextUnformatted(ICON_SPARKLES);
-    ImGui::PopFont();
-    ImGui::PopStyleColor();
-    ImGui::SameLine(0, S(8));
+    ImGui::SetCursorPos(ImVec2(S(18), S(16)));
+    ui::Logo(S(30));
+    ImGui::SameLine(0, S(10));
+    ImGui::SetCursorPosY(S(16) + (S(30) - ImGui::GetFontSize() * fontH2 / fontBody) * 0.5f);
     ImGui::PushFont(fonts.bold, fontH2);
     ImGui::TextUnformatted("Iconger");
     ImGui::PopFont();
     ImGui::SameLine(0, S(8));
-    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + S(2));
-    ui::Badge("BETA", textDim, accentBg);
+    ImGui::SetCursorPosY(S(16) + (S(30) - S(20)) * 0.5f);
+    ui::Badge("BETA", primary, primarySoft);
 
     ImGui::SetCursorPosY(S(76));
     struct Item { Page page; const char* icon; const char* label; int badge; };
@@ -616,7 +613,7 @@ void App::DrawPendingBanner()
     // shown on the list page too; the sidebar card is easy to miss on first use
     if (m_pendingChanges <= 0 || m_restarting) return;
     ImGui::PushStyleColor(ImGuiCol_ChildBg, warningSoft);
-    ImGui::PushStyleColor(ImGuiCol_Border, IM_COL32(234, 170, 64, 70));
+    ImGui::PushStyleColor(ImGuiCol_Border, warningBorder);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(S(14), S(12)));
     ImGui::BeginChild("##banner", ImVec2(0, 0), ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding | ImGuiChildFlags_AutoResizeY);
     ImGui::PopStyleVar();
@@ -791,7 +788,7 @@ void App::DrawEditor()
     ImGui::Dummy(ImVec2(0, S(4)));
     if (!e.sc.onTaskbar) {
         ImGui::PushStyleColor(ImGuiCol_ChildBg, warningSoft);
-        ImGui::PushStyleColor(ImGuiCol_Border, IM_COL32(234, 170, 64, 70));
+        ImGui::PushStyleColor(ImGuiCol_Border, warningBorder);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(S(14), S(10)));
         ImGui::BeginChild("##leftover", ImVec2(0, 0), ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding | ImGuiChildFlags_AutoResizeY);
         ImGui::PopStyleVar();
@@ -1186,7 +1183,7 @@ void App::DrawSettingsPage()
 
     ImGui::Spacing();
     ui::BeginCard("##storage", ImVec2(maxW, 0), 20);
-    ui::IconTile(ICON_FOLDER_OPEN, purple, purpleSoft, S(40));
+    ui::IconTile(ICON_FOLDER_OPEN, violet, violetSoft, S(40));
     ImGui::SameLine(0, S(14));
     ImGui::BeginGroup();
     ui::Heading("Folders", "Where Iconger keeps things.");
@@ -1213,7 +1210,7 @@ void App::DrawSettingsPage()
 
     ImGui::Spacing();
     ui::BeginCard("##about", ImVec2(maxW, 0), 20);
-    ui::IconTile(ICON_SPARKLES, success, successSoft, S(40));
+    ui::Logo(S(40));
     ImGui::SameLine(0, S(14));
     ImGui::BeginGroup();
     ui::Heading("Iconger v" ICONGER_VERSION, "Open source (MIT). Shortcuts: F5 reload, Ctrl+F search, Ctrl+O browse, Ctrl+S apply, Esc back.");

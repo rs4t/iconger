@@ -1,33 +1,40 @@
 #pragma once
 #include <imgui.h>
 
-// Visual language borrowed from Sparkle (github.com/thedogecraft/sparkle):
-// deep navy background, slightly lighter cards with a 1px border, one blue accent,
-// Lucide line icons, generous rounding.
+// Iconger's own look: warm "plum graphite" darks, one tangerine accent (the colour of
+// the tile being swapped in the logo), cards with a hairline border, Lucide icons.
+// Keep in sync with assets/make_icon.py.
 namespace theme {
 
-// Palette (Sparkle dark)
-inline constexpr ImU32 bg            = IM_COL32( 12,  18,  31, 255); // #0c121f
-inline constexpr ImU32 card          = IM_COL32( 19,  28,  44, 255); // #131c2c
-inline constexpr ImU32 cardHover     = IM_COL32( 26,  37,  56, 255);
-inline constexpr ImU32 border        = IM_COL32( 31,  42,  61, 255); // #1f2a3d
-inline constexpr ImU32 borderStrong  = IM_COL32( 45,  60,  84, 255);
-inline constexpr ImU32 accentBg      = IM_COL32( 36,  49,  68, 255); // #243144
-inline constexpr ImU32 primary       = IM_COL32( 79, 144, 230, 255); // #4f90e6
-inline constexpr ImU32 primaryHover  = IM_COL32(101, 160, 238, 255);
-inline constexpr ImU32 primarySoft   = IM_COL32( 79, 144, 230,  38);
-inline constexpr ImU32 success       = IM_COL32( 61, 181, 138, 255); // #3db58a
-inline constexpr ImU32 successSoft   = IM_COL32( 61, 181, 138,  36);
-inline constexpr ImU32 warning       = IM_COL32(234, 170,  64, 255);
-inline constexpr ImU32 warningSoft   = IM_COL32(234, 170,  64,  30);
-inline constexpr ImU32 danger        = IM_COL32(229,  83,  83, 255);
-inline constexpr ImU32 dangerSoft    = IM_COL32(229,  83,  83,  32);
-inline constexpr ImU32 purple        = IM_COL32(168, 110, 240, 255);
-inline constexpr ImU32 purpleSoft    = IM_COL32(168, 110, 240,  36);
-inline constexpr ImU32 text          = IM_COL32(240, 244, 248, 255); // #f0f4f8
-inline constexpr ImU32 textDim       = IM_COL32(170, 180, 195, 255); // #aab4c3
-inline constexpr ImU32 textSecondary = IM_COL32(126, 146, 169, 255); // #7e92a9
-inline constexpr ImU32 textMuted     = IM_COL32( 75,  89, 112, 255); // #4b5970
+// Palette
+inline constexpr ImU32 bg            = IM_COL32( 17,  15,  20, 255); // #110f14 window
+inline constexpr ImU32 panel         = IM_COL32( 21,  18,  26, 255); // #15121a content area
+inline constexpr ImU32 card          = IM_COL32( 27,  24,  33, 255); // #1b1821
+inline constexpr ImU32 cardHover     = IM_COL32( 35,  31,  42, 255); // #231f2a
+inline constexpr ImU32 border        = IM_COL32( 44,  39,  51, 255); // #2c2733
+inline constexpr ImU32 borderStrong  = IM_COL32( 61,  54,  71, 255); // #3d3647
+inline constexpr ImU32 accentBg      = IM_COL32( 42,  37,  49, 255); // #2a2531 hover / chips
+inline constexpr ImU32 logoSlot      = IM_COL32( 74,  66,  85, 255); // #4a4255 logo slots
+inline constexpr ImU32 primary       = IM_COL32(255, 138,  61, 255); // #ff8a3d tangerine
+inline constexpr ImU32 primaryHover  = IM_COL32(255, 162,  95, 255); // #ffa25f
+inline constexpr ImU32 primarySoft   = IM_COL32(255, 138,  61,  34);
+inline constexpr ImU32 onPrimary     = IM_COL32( 33,  17,   6, 255); // text on tangerine
+inline constexpr ImU32 success       = IM_COL32( 76, 195, 138, 255); // #4cc38a
+inline constexpr ImU32 successSoft   = IM_COL32( 76, 195, 138,  34);
+inline constexpr ImU32 warning       = IM_COL32(245, 196,  81, 255); // #f5c451
+inline constexpr ImU32 warningSoft   = IM_COL32(245, 196,  81,  28);
+inline constexpr ImU32 warningBorder = IM_COL32(245, 196,  81,  70);
+inline constexpr ImU32 danger        = IM_COL32(239,  90, 111, 255); // #ef5a6f
+inline constexpr ImU32 dangerSoft    = IM_COL32(239,  90, 111,  32);
+inline constexpr ImU32 violet        = IM_COL32(167, 139, 250, 255); // #a78bfa
+inline constexpr ImU32 violetSoft    = IM_COL32(167, 139, 250,  34);
+inline constexpr ImU32 text          = IM_COL32(245, 241, 247, 255); // #f5f1f7
+inline constexpr ImU32 textDim       = IM_COL32(205, 197, 211, 255); // #cdc5d3
+inline constexpr ImU32 textSecondary = IM_COL32(150, 140, 159, 255); // #968c9f
+inline constexpr ImU32 textMuted     = IM_COL32( 94,  86, 104, 255); // #5e5668
+
+/// Same colour as bg, for Win32 (title bar, window brush, swap-chain clear).
+inline constexpr unsigned long bgColorRef = 0x00140F11; // RGB(17, 15, 20) as COLORREF (0x00BBGGRR)
 
 // Fonts (ImGui 1.92 atlas is dynamic, so one ImFont serves every size)
 struct Fonts {
@@ -58,7 +65,6 @@ inline float S(float px) { return px * Scale(); }
 #define ICON_PIN            "\uE259"
 #define ICON_HISTORY        "\uE1F5"
 #define ICON_SETTINGS       "\uE154"
-#define ICON_SPARKLES       "\uE412"
 #define ICON_REFRESH        "\uE145"
 #define ICON_FOLDER_OPEN    "\uE247"
 #define ICON_SEARCH         "\uE151"

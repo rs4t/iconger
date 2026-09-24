@@ -49,7 +49,7 @@ bool Button(const char* label, const char* icon, ButtonKind kind, ImVec2 size, b
 
     ImU32 fill = 0, line = 0, fg = text;
     switch (kind) {
-    case ButtonKind::Primary:   fill = hovered ? primaryHover : primary; fg = IM_COL32_WHITE; break;
+    case ButtonKind::Primary:   fill = hovered ? primaryHover : primary; fg = onPrimary; break;
     case ButtonKind::Secondary: fill = hovered ? accentBg : card; line = border; break;
     case ButtonKind::Outline:   fill = hovered ? primarySoft : 0; line = primary; fg = primary; break;
     case ButtonKind::Danger:    fill = hovered ? danger : dangerSoft; line = danger; fg = hovered ? IM_COL32_WHITE : danger; break;
@@ -57,6 +57,12 @@ bool Button(const char* label, const char* icon, ButtonKind kind, ImVec2 size, b
     }
     if (held) fill = Fade(fill ? fill : accentBg, 0.8f);
     float alpha = enabled ? 1.0f : 0.4f;
+    if (!enabled && kind == ButtonKind::Primary) {
+        // a faded tangerine reads as muddy brown; show a neutral inactive button instead
+        fill = accentBg;
+        fg = textMuted;
+        alpha = 1.0f;
+    }
 
     ImDrawList* dl = ImGui::GetWindowDrawList();
     ImVec2 max(pos.x + size.x, pos.y + size.y);
@@ -81,6 +87,46 @@ bool IconButton(const char* id, const char* icon, const char* tooltip, bool enab
     ImGui::PopID();
     if (tooltip) Tooltip(tooltip);
     return pressed;
+}
+
+// Rounded square centred on c, rotated by `angle` radians, as a filled/stroked path.
+static void RoundedSquarePath(ImDrawList* dl, ImVec2 c, float side, float radius, float angle)
+{
+    const float h = side * 0.5f - radius;
+    const float ca = std::cos(angle), sa = std::sin(angle);
+    const ImVec2 corners[4] = { { h, -h }, { h, h }, { -h, h }, { -h, -h } };
+    for (int i = 0; i < 4; ++i) {
+        float start = -IM_PI * 0.5f + IM_PI * 0.5f * i;
+        for (int k = 0; k <= 6; ++k) {
+            float t = start + IM_PI * 0.5f * k / 6;
+            float x = corners[i].x + radius * std::cos(t), y = corners[i].y + radius * std::sin(t);
+            dl->PathLineTo(ImVec2(c.x + x * ca - y * sa, c.y + x * sa + y * ca));
+        }
+    }
+}
+
+void Logo(float size, bool withBackground)
+{
+    ImVec2 p = ImGui::GetCursorScreenPos();
+    ImGui::Dummy(ImVec2(size, size));
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const float u = size / 1024.0f; // coordinates below match make_icon.py's 1024 canvas
+    auto P = [&](float x, float y) { return ImVec2(p.x + x * u, p.y + y * u); };
+
+    if (withBackground) {
+        dl->AddRectFilled(P(40, 40), P(984, 984), card, 230 * u);
+        dl->AddRect(P(40, 40), P(984, 984), border, 230 * u, std::max(1.0f, 20 * u));
+    }
+    const float t = 250, gap = 64, x0 = (1024 - (t * 2 + gap)) / 2;
+    for (int i = 0; i < 4; ++i) {
+        ImVec2 c = P(x0 + t / 2 + (i % 2) * (t + gap), x0 + t / 2 + (i / 2) * (t + gap));
+        RoundedSquarePath(dl, c, i == 1 ? (t - 20) * u : t * u, (i == 1 ? 56 : 64) * u, 0);
+        if (i == 1) dl->PathStroke(logoSlot, std::max(1.0f, 20 * u), ImDrawFlags_Closed); // the empty slot
+        else dl->PathFillConvex(logoSlot);
+    }
+    ImVec2 slot = P(x0 + t * 1.5f + gap, x0 + t / 2);
+    RoundedSquarePath(dl, ImVec2(slot.x + 40 * u, slot.y - 64 * u), (t + 30) * u, 70 * u, 14.0f * IM_PI / 180.0f);
+    dl->PathFillConvex(primary);
 }
 
 void IconTile(const char* icon, ImU32 color, ImU32 softColor, float size)

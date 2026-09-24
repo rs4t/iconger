@@ -2,7 +2,7 @@
 #include <imgui.h>
 #include <string>
 
-// Small Sparkle-flavoured widget kit on top of Dear ImGui.
+// Small widget kit on top of Dear ImGui (cards, buttons, toggles, toasts).
 namespace ui {
 
 enum class ButtonKind { Primary, Secondary, Outline, Danger, Ghost };
@@ -14,7 +14,11 @@ bool Button(const char* label, const char* icon = nullptr, ButtonKind kind = But
 /// Square icon-only button with tooltip.
 bool IconButton(const char* id, const char* icon, const char* tooltip, bool enabled = true);
 
-/// Rounded square with a tinted background and a centred glyph (Sparkle's card headers).
+/// The Iconger mark (same drawing as assets/make_icon.py), vector so it's crisp at any DPI.
+/// withBackground=false draws just the tiles, for use on an existing surface.
+void Logo(float size, bool withBackground = true);
+
+/// Rounded square with a tinted background and a centred glyph (card headers).
 void IconTile(const char* icon, ImU32 color, ImU32 softColor, float size);
 
 /// Card container: rounded, bordered, padded. Height 0 = auto-fit contents.
