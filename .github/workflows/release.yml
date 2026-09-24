@@ -1,11 +1,16 @@
-# Push a tag like v0.4.1 to build iconger.exe with MSVC, run the tests on Windows
-# and publish a GitHub release with the exe. The annotated tag's message is the
-# release notes (git tag -a v0.4.1 -F notes.md).
+# Builds iconger.exe with MSVC, runs the tests on Windows and publishes a GitHub
+# release with the exe. Two ways to start it:
+#   - add .github/release-notes/vX.Y.Z.md (matching the version in CMakeLists.txt)
+#     and push: the release and its tag are created from that commit;
+#   - push a tag vX.Y.Z: the notes come from that file if it exists, else from the
+#     annotated tag's message.
+# A version that already has a release is skipped.
 name: release
 
 on:
   push:
     tags: ["v*"]
+    paths: [".github/release-notes/**"]
 
 permissions:
   contents: write
@@ -13,31 +18,53 @@ permissions:
 jobs:
   build:
     runs-on: windows-2022
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # the tag's message is read below
+          fetch-depth: 0
 
-      - name: Configure
-        run: cmake -B build -G "Visual Studio 17 2022" -A x64
-
-      - name: Build
-        run: cmake --build build --config Release --parallel
-
-      - name: Test
-        run: ctest --test-dir build -C Release --output-on-failure
-
-      - name: Check version matches tag
-        shell: bash
-        run: |
-          want="${GITHUB_REF_NAME#v}"
-          grep -q "project(iconger VERSION ${want} " CMakeLists.txt || { echo "CMakeLists.txt version is not ${want}"; exit 1; }
-
-      - name: Publish release
-        shell: bash
+      - name: Pick version
+        id: v
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          git fetch --force origin "refs/tags/${GITHUB_REF_NAME}:refs/tags/${GITHUB_REF_NAME}"
-          git tag -l --format='%(contents)' "${GITHUB_REF_NAME}" > notes.md
-          gh release create "${GITHUB_REF_NAME}" build/Release/iconger.exe --title "${GITHUB_REF_NAME}" --notes-file notes.md
+          version=$(sed -n 's/^project(iconger VERSION \([0-9.]*\) .*/\1/p' CMakeLists.txt)
+          tag="v${version}"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ] && [ "${GITHUB_REF_NAME}" != "${tag}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} doesn't match CMakeLists.txt version ${version}"; exit 1
+          fi
+          notes=".github/release-notes/${tag}.md"
+          if [ -f "${notes}" ]; then
+            cp "${notes}" notes.md
+          elif [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            git tag -l --format='%(contents)' "${tag}" > notes.md
+          else
+            echo "No ${notes}, nothing to release"; echo "skip=1" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if gh release view "${tag}" > /dev/null 2>&1; then
+            echo "${tag} is already released"; echo "skip=1" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+
+      - name: Configure
+        if: steps.v.outputs.skip != '1'
+        run: cmake -B build -G "Visual Studio 17 2022" -A x64
+
+      - name: Build
+        if: steps.v.outputs.skip != '1'
+        run: cmake --build build --config Release --parallel
+
+      - name: Test
+        if: steps.v.outputs.skip != '1'
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Publish release
+        if: steps.v.outputs.skip != '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.v.outputs.tag }}" build/Release/iconger.exe \
+            --target "${GITHUB_SHA}" --title "${{ steps.v.outputs.tag }}" --notes-file notes.md
