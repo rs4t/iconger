@@ -338,6 +338,9 @@ void App::ApplyCommandLine(int argc, wchar_t** argv)
                     if (m_entries[j].sc.onTaskbar == (pass == 0) &&
                         _wcsicmp(m_entries[j].sc.displayName.c_str(), val.c_str()) == 0) { OpenEditor(j); break; }
             ++i;
+        } else if (arg == L"--icon" && m_editing >= 0 && val == L"current") {
+            CustomizeCurrentIcon(); // same as the "Customize current icon" button
+            ++i;
         } else if (arg == L"--icon" && m_editing >= 0) {
             // "file" or "file.exe,index": preview it, nothing is applied
             size_t comma = val.rfind(L',');

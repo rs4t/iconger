@@ -43,6 +43,7 @@ The app icon is generated: edit `assets/make_icon.py` and run `python assets/mak
 iconger.exe --open "Firefox"                        open the icon editor for a pinned app
 iconger.exe --open "Firefox" --icon "C:\icons\fox.png"  ...with that icon already previewed (not applied)
 iconger.exe --open "Firefox" --icon "firefox.exe,14"  ...or icon #14 of an .exe/.dll
+iconger.exe --open "Firefox" --icon current           ...or the icon it has now (same as "Customize current icon")
 iconger.exe --open "Firefox" --icon "firefox.exe,10" --adjust "hue=-150,saturation=130"
                                                     ...and with colour adjustments (hue, saturation,
                                                        brightness, contrast, tint)

@@ -2,12 +2,25 @@
 #include "icon_utils.h"
 #include <backends/imgui_impl_dx11.h>
 #include <iterator>
+#include <vector>
 
 static ID3D11Device*           g_device = nullptr;
 static ID3D11DeviceContext*    g_context = nullptr;
 static IDXGISwapChain*         g_swapChain = nullptr;
 static ID3D11RenderTargetView* g_rtv = nullptr;
 static bool                    g_occluded = false;
+
+// Textures dropped while a frame is being built may already be referenced by that
+// frame's draw list (e.g. the icon preview is drawn, then a slider replaces it).
+// Releasing them right away left the renderer using a freed view: heap corruption.
+// So they are parked here and released once the frame has been rendered.
+static std::vector<ID3D11ShaderResourceView*> g_releaseAfterFrame;
+
+static void ReleaseParkedTextures()
+{
+    for (auto* srv : g_releaseAfterFrame) srv->Release();
+    g_releaseAfterFrame.clear();
+}
 
 ID3D11Device* GfxDevice() { return g_device; }
 ID3D11DeviceContext* GfxContext() { return g_context; }
@@ -62,6 +75,7 @@ bool GfxInit(HWND hwnd)
 
 void GfxShutdown()
 {
+    ReleaseParkedTextures();
     ReleaseRenderTarget();
     if (g_swapChain) { g_swapChain->Release(); g_swapChain = nullptr; }
     if (g_context) { g_context->Release(); g_context = nullptr; }
@@ -81,6 +95,7 @@ void GfxRender(const float clearColor[4])
     g_context->OMSetRenderTargets(1, &g_rtv, nullptr);
     g_context->ClearRenderTargetView(g_rtv, clearColor);
     ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+    ReleaseParkedTextures(); // the frame that could still reference them is submitted
 }
 
 bool GfxPresent()
@@ -124,5 +139,8 @@ Texture& Texture::operator=(Texture&& o) noexcept
 
 void Texture::Reset()
 {
-    if (m_srv) { m_srv->Release(); m_srv = nullptr; }
+    if (!m_srv) return;
+    if (g_device) g_releaseAfterFrame.push_back(m_srv);
+    else m_srv->Release(); // after GfxShutdown there are no more frames to wait for
+    m_srv = nullptr;
 }
