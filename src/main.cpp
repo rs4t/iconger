@@ -7,6 +7,8 @@
 #include <windows.h>
 #include <dwmapi.h>
 #include <shellapi.h>
+#include <windowsx.h>
+#include <algorithm>
 #include <imgui.h>
 #include <backends/imgui_impl_win32.h>
 #include <backends/imgui_impl_dx11.h>
@@ -16,15 +18,23 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND, UINT, WPARAM,
 static App g_app;
 static bool g_ready = false;
 
-// Paint the native title bar in the app's background colour (Windows 11) and
-// use the dark variant elsewhere, so the window reads as one surface.
-static void StyleTitleBar(HWND hwnd)
+// The window draws its own title bar (see WM_NCCALCSIZE below). Keep the dark
+// variant for anything Windows still draws (borders, system menu), and on Windows 11
+// colour the 1 px border to match the app.
+static void StyleFrame(HWND hwnd)
 {
     BOOL dark = TRUE;
     DwmSetWindowAttribute(hwnd, 20 /*DWMWA_USE_IMMERSIVE_DARK_MODE*/, &dark, sizeof(dark));
-    COLORREF caption = theme::bgColorRef, textCol = RGB(245, 241, 247);
-    DwmSetWindowAttribute(hwnd, 35 /*DWMWA_CAPTION_COLOR*/, &caption, sizeof(caption));
-    DwmSetWindowAttribute(hwnd, 36 /*DWMWA_TEXT_COLOR*/, &textCol, sizeof(textCol));
+    COLORREF borderCol = RGB(44, 39, 51); // theme::border
+    DwmSetWindowAttribute(hwnd, 34 /*DWMWA_BORDER_COLOR*/, &borderCol, sizeof(borderCol));
+}
+
+// Size of the invisible resize border Windows puts around a sizable window.
+static POINT FrameSize(HWND hwnd)
+{
+    UINT dpi = GetDpiForWindow(hwnd);
+    int pad = GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi);
+    return { GetSystemMetricsForDpi(SM_CXFRAME, dpi) + pad, GetSystemMetricsForDpi(SM_CYFRAME, dpi) + pad };
 }
 
 static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -61,6 +71,61 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
         if (g_ready) g_app.OnFilesDropped(files);
         return 0;
     }
+    case WM_NCCALCSIZE:
+        // Take over the title bar: the client area extends to the top edge, but keeps
+        // Windows' resize borders on the other sides (and so the shadow, snapping and
+        // rounded corners of a normal window).
+        if (wParam) {
+            RECT& r = reinterpret_cast<NCCALCSIZE_PARAMS*>(lParam)->rgrc[0];
+            POINT f = FrameSize(hwnd);
+            r.left += f.x;
+            r.right -= f.x;
+            r.bottom -= f.y;
+            if (IsZoomed(hwnd)) r.top += f.y; // maximized windows hang over the screen edge by the frame size
+            return 0;
+        }
+        break;
+    case WM_NCHITTEST: {
+        LRESULT hit = DefWindowProcW(hwnd, msg, wParam, lParam); // side and bottom borders
+        if (hit != HTCLIENT) return hit;
+        POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
+        ScreenToClient(hwnd, &pt);
+        if (!IsZoomed(hwnd)) {
+            // the top resize border now lies inside our client area
+            RECT rc;
+            GetClientRect(hwnd, &rc);
+            POINT f = FrameSize(hwnd);
+            int top = std::max(2, (int)(f.y * 0.6f));
+            if (pt.y < top) return pt.x < f.x * 2 ? HTTOPLEFT : pt.x >= rc.right - f.x * 2 ? HTTOPRIGHT : HTTOP;
+        }
+        if (g_ready) {
+            switch (g_app.HitTestTitleBar(pt.x, pt.y)) {
+            case App::TitleHit::Caption:  return HTCAPTION;   // drag, double-click, right-click menu
+            case App::TitleHit::Maximize: return HTMAXBUTTON; // lets Windows 11 show Snap Layouts
+            default: break;
+            }
+        }
+        return HTCLIENT;
+    }
+    // The maximize button counts as non-client (for Snap Layouts), so its clicks come
+    // here instead of to the UI. Eat them, or Windows paints its own classic button.
+    case WM_NCLBUTTONDOWN:
+    case WM_NCLBUTTONDBLCLK:
+        if (wParam == HTMAXBUTTON) {
+            if (g_ready) g_app.SetMaximizePressed(true);
+            return 0;
+        }
+        break;
+    case WM_NCLBUTTONUP:
+        if (wParam == HTMAXBUTTON) {
+            if (g_ready) g_app.SetMaximizePressed(false);
+            ShowWindow(hwnd, IsZoomed(hwnd) ? SW_RESTORE : SW_MAXIMIZE);
+            return 0;
+        }
+        break;
+    case WM_NCMOUSELEAVE:
+        if (g_ready) g_app.SetMaximizePressed(false);
+        break;
     case WM_SYSCOMMAND:
         if ((wParam & 0xfff0) == SC_KEYMENU) return 0; // Alt would freeze the loop in the menu
         break;
@@ -114,8 +179,8 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, PWSTR, int nCmdShow)
     int h = std::min((int)(740 * scale), (int)(mi.rcWork.bottom - mi.rcWork.top));
     SetWindowPos(hwnd, nullptr, mi.rcWork.left + ((mi.rcWork.right - mi.rcWork.left) - w) / 2,
                  mi.rcWork.top + ((mi.rcWork.bottom - mi.rcWork.top) - h) / 2, w, h,
-                 SWP_NOZORDER | SWP_NOACTIVATE);
-    StyleTitleBar(hwnd);
+                 SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED); // FRAMECHANGED: apply WM_NCCALCSIZE
+    StyleFrame(hwnd);
 
     if (!GfxInit(hwnd)) {
         MessageBoxW(hwnd, L"Could not initialise Direct3D 11.", L"Iconger", MB_ICONERROR);

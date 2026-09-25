@@ -26,9 +26,11 @@ void App::Frame()
         ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoSavedSettings |
         ImGuiWindowFlags_NoScrollWithMouse);
 
+    m_titleH = TitleBarHeight();
     if (!m_settings.welcomed) {
         DrawWelcome();
         ImGui::End();
+        DrawWindowControls();
         ui::RenderToasts();
         return;
     }
@@ -39,7 +41,7 @@ void App::Frame()
     // Content panel: rounded top-left corner + hairline border.
     ImVec2 wp = ImGui::GetWindowPos();
     ImVec2 ws = ImGui::GetWindowSize();
-    ImVec2 c0(wp.x + sidebarW, wp.y + S(8));
+    ImVec2 c0(wp.x + sidebarW, wp.y + m_titleH); // the strip above it is the title bar
     ImDrawList* dl = ImGui::GetWindowDrawList();
     float r = S(14);
     dl->AddRectFilled(c0, ImVec2(wp.x + ws.x + r, wp.y + ws.y + r), panel, r, ImDrawFlags_RoundCornersTopLeft);
@@ -66,7 +68,96 @@ void App::Frame()
 
     DrawModals();
     ImGui::End();
+    DrawWindowControls();
     ui::RenderToasts();
+}
+
+// ============================================================================
+// Title bar (the window has no Windows title bar; see WM_NCCALCSIZE in main.cpp)
+// ============================================================================
+
+float App::TitleBarHeight() const { return S(46); }
+
+App::TitleHit App::HitTestTitleBar(int x, int y) const
+{
+    if ((float)y >= m_titleH) return TitleHit::None;
+    const TitleHit kinds[3] = { TitleHit::Minimize, TitleHit::Maximize, TitleHit::Close };
+    for (int i = 0; i < 3; ++i) {
+        const ImVec4& r = m_ctlRect[i];
+        if (x >= r.x && x < r.z && y >= r.y && y < r.w) return kinds[i];
+    }
+    return TitleHit::Caption; // everything else in the strip drags the window
+}
+
+// Minimize / maximize / close, drawn above everything (even an open dialog) so the
+// window can always be closed. Glyphs are drawn as lines: crisp at any DPI.
+void App::DrawWindowControls()
+{
+    ImGuiIO& io = ImGui::GetIO();
+    ImDrawList* dl = ImGui::GetForegroundDrawList();
+    const float w = S(46), h = S(34);
+    const float right = ImGui::GetMainViewport()->Size.x;
+    const bool maximized = IsZoomed(m_hwnd) != 0;
+    const bool focused = GetForegroundWindow() == m_hwnd;
+    static const char* ids[3] = { "##tb-min", "##tb-max", "##tb-close" };
+
+    for (int i = 0; i < 3; ++i) {
+        ImVec2 a(right - w * (3 - i), 0), b(a.x + w, h);
+        m_ctlRect[i] = ImVec4(a.x, a.y, b.x, b.y);
+        const bool hovered = io.MousePos.x >= a.x && io.MousePos.x < b.x && io.MousePos.y >= a.y && io.MousePos.y < b.y;
+
+        // minimize and close are ordinary client-area clicks; maximize is handled in main.cpp
+        if (i != 1) {
+            if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) m_ctlHeld = i;
+            if (m_ctlHeld == i && ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+                m_ctlHeld = -1;
+                if (hovered) {
+                    if (i == 0) ShowWindow(m_hwnd, SW_MINIMIZE);
+                    else PostMessageW(m_hwnd, WM_CLOSE, 0, 0);
+                }
+            }
+        }
+        const bool pressed = (i == 1 ? m_maxPressed : m_ctlHeld == i) && hovered;
+        const float hov = anim::Smooth(ImHashStr(ids[i]), hovered ? 1.0f : 0.0f, 20.0f);
+
+        ImU32 fill = 0, fg = focused ? textDim : textMuted;
+        if (i == 2) { // close turns red, like Windows
+            const ImU32 red = IM_COL32(196, 43, 28, 255);
+            fill = FadeCol(red, hov * (pressed ? 0.85f : 1.0f));
+            fg = MixCol(fg, IM_COL32_WHITE, hov);
+        } else {
+            fill = FadeCol(IM_COL32_WHITE, hov * (pressed ? 0.05f : 0.08f));
+            fg = MixCol(fg, text, hov);
+        }
+        if (hov > 0) dl->AddRectFilled(a, b, fill);
+
+        const float g = std::floor(S(10)) , t = std::max(1.0f, std::floor(S(1)));
+        ImVec2 c(std::floor((a.x + b.x) * 0.5f) + 0.5f, std::floor((a.y + b.y) * 0.5f) + 0.5f);
+        switch (i) {
+        case 0:
+            dl->AddLine(ImVec2(c.x - g * 0.5f, c.y), ImVec2(c.x + g * 0.5f, c.y), fg, t);
+            break;
+        case 1:
+            if (maximized) { // restore: two overlapping squares
+                float o = std::floor(S(2));
+                dl->AddRect(ImVec2(c.x - g * 0.5f, c.y - g * 0.5f + o), ImVec2(c.x + g * 0.5f - o, c.y + g * 0.5f), fg, S(1.5f), t);
+                dl->PathLineTo(ImVec2(c.x - g * 0.5f + o, c.y - g * 0.5f + o));
+                dl->PathLineTo(ImVec2(c.x - g * 0.5f + o, c.y - g * 0.5f));
+                dl->PathLineTo(ImVec2(c.x + g * 0.5f, c.y - g * 0.5f));
+                dl->PathLineTo(ImVec2(c.x + g * 0.5f, c.y + g * 0.5f - o));
+                dl->PathLineTo(ImVec2(c.x + g * 0.5f - o, c.y + g * 0.5f - o));
+                dl->PathStroke(fg, t);
+            } else {
+                dl->AddRect(ImVec2(c.x - g * 0.5f, c.y - g * 0.5f), ImVec2(c.x + g * 0.5f, c.y + g * 0.5f), fg, S(1.5f), t);
+            }
+            break;
+        case 2:
+            dl->AddLine(ImVec2(c.x - g * 0.5f, c.y - g * 0.5f), ImVec2(c.x + g * 0.5f, c.y + g * 0.5f), fg, t);
+            dl->AddLine(ImVec2(c.x + g * 0.5f, c.y - g * 0.5f), ImVec2(c.x - g * 0.5f, c.y + g * 0.5f), fg, t);
+            break;
+        }
+    }
+    if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) m_ctlHeld = -1;
 }
 
 void App::HandleShortcuts()
@@ -92,20 +183,22 @@ void App::HandleShortcuts()
 
 void App::DrawSidebar(float width)
 {
-    ImGui::SetCursorPos(ImVec2(S(18), S(16)));
-    ui::Logo(S(30));
+    // logo and name sit in the title bar strip, which also drags the window
+    const float logo = S(26), ly = std::floor((m_titleH - logo) * 0.5f);
+    ImGui::SetCursorPos(ImVec2(S(18), ly));
+    ui::Logo(logo);
     ImGui::SameLine(0, S(10));
-    ImGui::SetCursorPosY(S(16) + (S(30) - ImGui::GetFontSize() * fontH2 / fontBody) * 0.5f);
+    ImGui::SetCursorPosY(ly + (logo - ImGui::GetFontSize() * fontH2 / fontBody) * 0.5f);
     ImGui::PushFont(fonts.bold, fontH2);
     ImGui::TextUnformatted("Iconger");
     ImGui::PopFont();
     if (ICONGER_VERSION[0] == '0') { // major version 0 = beta (see CMakeLists.txt)
         ImGui::SameLine(0, S(8));
-        ImGui::SetCursorPosY(S(16) + (S(30) - S(20)) * 0.5f);
+        ImGui::SetCursorPosY(ly + (logo - S(20)) * 0.5f);
         ui::Badge("BETA", primary, primarySoft);
     }
 
-    ImGui::SetCursorPosY(S(76));
+    ImGui::SetCursorPosY(m_titleH + S(18));
     struct Item { Page page; const char* icon; const char* label; int badge; };
     const Item items[] = {
         { Page::Pinned,   ICON_PIN,      "Pinned apps", 0 },

@@ -37,6 +37,12 @@ public:
     /// An update was installed: main should close the window and start the new exe.
     bool WantsRelaunch() const { return m_relaunch; }
 
+    /// What's under a point (client pixels) of the custom title bar, for WM_NCHITTEST.
+    enum class TitleHit { None, Caption, Minimize, Maximize, Close };
+    TitleHit HitTestTitleBar(int x, int y) const;
+    /// The maximize button is pressed/released (its clicks arrive as non-client messages).
+    void SetMaximizePressed(bool pressed) { m_maxPressed = pressed; }
+
 private:
     struct Entry {
         PinnedShortcut sc;
@@ -98,6 +104,8 @@ private:
 
     // views
     void DrawSidebar(float width);
+    void DrawWindowControls();
+    float TitleBarHeight() const;
     void DrawPinnedPage();
     void DrawAppCard(int index, float width);
     void DrawEditor();
@@ -162,6 +170,12 @@ private:
     bool m_openUpdate = false;
     bool m_relaunch = false;
     float m_welcomeHeight = 0;     // measured last frame, to centre the welcome screen
+
+    // custom title bar: geometry from the last frame (client pixels), read by WM_NCHITTEST
+    float m_titleH = 0;
+    ImVec4 m_ctlRect[3] = {};      // minimize, maximize, close: x0, y0, x1, y1
+    int m_ctlHeld = -1;            // minimize/close pressed in the UI
+    bool m_maxPressed = false;
 
     // animation timelines (ImGui::GetTime() when it happened)
     double m_startedAt = 0;        // app start: the sidebar menu rises in
