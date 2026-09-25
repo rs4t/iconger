@@ -15,6 +15,7 @@ Change the icons of the apps pinned to your Windows 10/11 taskbar.
 - Finds the "leftover" shortcuts Windows leaves behind when you re-pin an app (`App.lnk` next to `App (2).lnk`). Editing those does nothing, so Iconger shows which one the taskbar actually uses.
 - Keeps itself up to date: at startup it checks GitHub for a newer release and, if you say yes, downloads it (size and SHA-256 checked), swaps it in and restarts. Can be turned off in Settings.
 - Shows up in Windows search like any app (a Start menu shortcut, optional).
+- Smooth, quick animations throughout (pages, lists, dialogs, previews). They switch off when Windows' own "Animation effects" setting is off.
 - New icons show up on the taskbar right away. If one ever gets stuck, Settings has a one-click Explorer restart (via Restart Manager, so open folder windows come back) that can also clear the icon cache.
 
 ## Download
@@ -37,6 +38,8 @@ Dear ImGui, stb, nanosvg, nlohmann/json and the Lucide icon font are fetched aut
 
 Run the core tests with `ctest --test-dir build -C Release`. Set `ICONGER_NET_TESTS=1` to also test the online icon libraries (downloads icons, writes a contact sheet to `%TEMP%\iconger-online-sheet.png`).
 
+Releases are built by GitHub Actions (`.github/workflows/release.yml`) on Windows with MSVC, and published only if the tests pass. To make one: bump the version in `CMakeLists.txt`, add `.github/release-notes/vX.Y.Z.md`, and push. The workflow creates the tag and the release with `iconger.exe` attached. It skips versions that are already released.
+
 The app icon is generated: edit `assets/make_icon.py` and run `python assets/make_icon.py` (needs Pillow). The in-app logo (`ui::Logo`) draws the same shape, and the palette lives in `src/ui/theme.h`.
 
 ## Command line
@@ -56,11 +59,11 @@ Options can be given in any order.
 
 ## Keyboard
 
-`F5` reload, `Ctrl+F` search, `Ctrl+O` browse for an icon, `Ctrl+S` apply, `Esc` back.
+`F5` reload, `Ctrl+F` search, `Ctrl+O` browse for an icon, `Ctrl+S` apply, `Esc` (or the mouse's back button) back.
 
 ## Versioning
 
-`MAJOR.MINOR.PATCH`, e.g. `0.2.1`:
+`MAJOR.MINOR.PATCH`, e.g. `0.6.0`:
 
 - **MAJOR**: `0` while in beta, `1` for the first official release. Bumped again only for rare, huge changes.
 - **MINOR**: updates such as new features and bigger changes.

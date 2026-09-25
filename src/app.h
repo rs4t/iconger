@@ -163,6 +163,13 @@ private:
     bool m_relaunch = false;
     float m_welcomeHeight = 0;     // measured last frame, to centre the welcome screen
 
+    // animation timelines (ImGui::GetTime() when it happened)
+    double m_startedAt = 0;        // app start: the sidebar menu rises in
+    double m_candAt = -100;        // an icon was picked: the "New" preview pops
+    double m_adjustAt = -100;      // the first icon was picked: the Adjust panel rises in
+    double m_appliedAt = -100;     // an icon was applied or restored: the card and preview celebrate
+    std::wstring m_appliedKey;     // ...for this pin (EntryKey)
+
     std::thread m_restartThread;
     std::atomic<bool> m_restarting{ false };
     std::atomic<bool> m_restartDone{ false };

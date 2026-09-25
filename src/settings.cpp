@@ -1,6 +1,7 @@
 #include "settings.h"
 #include "app_paths.h"
 #include <windows.h>
+#include <iterator>
 
 static std::wstring SettingsFile() { return DataDir() + L"\\settings.ini"; }
 
@@ -25,6 +26,9 @@ void Settings::Load()
     // backups from them has used Iconger already.
     bool usedBefore = FileExists(SettingsFile()) || FileExists(DataDir() + L"\\backups.tsv");
     welcomed          = ReadBool(L"welcomed", usedBefore);
+    wchar_t buf[64] = {};
+    GetPrivateProfileStringW(L"iconger", L"skippedVersion", L"", buf, (DWORD)std::size(buf), SettingsFile().c_str());
+    skippedVersion = buf;
 }
 
 void Settings::Save() const
@@ -35,4 +39,5 @@ void Settings::Save() const
     WriteBool(L"startMenuShortcut", startMenuShortcut);
     WriteBool(L"checkUpdates", checkUpdates);
     WriteBool(L"welcomed", welcomed);
+    WritePrivateProfileStringW(L"iconger", L"skippedVersion", skippedVersion.c_str(), SettingsFile().c_str());
 }

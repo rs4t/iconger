@@ -1,4 +1,5 @@
 #pragma once
+#include <string>
 
 /// User preferences, persisted to %LOCALAPPDATA%\Iconger\settings.ini.
 struct Settings {
@@ -8,6 +9,7 @@ struct Settings {
     bool startMenuShortcut = true;  // keep Programs\Iconger.lnk, so Windows search finds Iconger
     bool checkUpdates      = true;  // ask GitHub for a newer release at startup
     bool welcomed          = false; // the first-run welcome screen was dismissed
+    std::wstring skippedVersion;    // "Skip this version" in the update dialog: don't ask for it at startup
 
     void Load();
     void Save() const;

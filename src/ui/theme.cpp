@@ -1,6 +1,7 @@
 #include "ui/theme.h"
 #include "app_paths.h"
 #include <windows.h>
+#include <initializer_list>
 
 namespace theme {
 
@@ -39,11 +40,21 @@ static void MergeCjkFallback(ImFontAtlas* atlas)
     atlas->AddFontFromMemoryTTF(data.data(), (int)data.size(), fontBody, &cfg);
 }
 
-static ImFont* AddFace(ImFontAtlas* atlas, const wchar_t* file, bool withFallback)
+// First font file that exists in %SystemRoot%\Fonts, or ImGui's built-in one.
+static ImFont* AddFace(ImFontAtlas* atlas, std::initializer_list<const wchar_t*> files, bool withFallback)
 {
-    std::wstring path = ExpandEnv(std::wstring(L"%SystemRoot%\\Fonts\\") + file);
-    ImFont* f = FileExists(path) ? atlas->AddFontFromFileTTF(WideToUtf8(path).c_str(), fontBody) : nullptr;
-    if (!f) f = atlas->AddFontDefault();
+    ImFont* f = nullptr;
+    for (const wchar_t* file : files) {
+        std::wstring path = ExpandEnv(std::wstring(L"%SystemRoot%\\Fonts\\") + file);
+        if (FileExists(path) && (f = atlas->AddFontFromFileTTF(WideToUtf8(path).c_str(), fontBody))) break;
+    }
+    if (!f) {
+        // Give the built-in font an explicit size too: merging the (explicitly sized)
+        // icon font into a font with an implicit size is not allowed.
+        ImFontConfig cfg;
+        cfg.SizePixels = fontBody;
+        f = atlas->AddFontDefault(&cfg);
+    }
     MergeIcons(atlas);
     if (withFallback) MergeCjkFallback(atlas);
     return f;
@@ -51,10 +62,11 @@ static ImFont* AddFace(ImFontAtlas* atlas, const wchar_t* file, bool withFallbac
 
 void LoadFonts()
 {
+    // Segoe UI ships with every Windows 10/11; the others cover stripped-down installs.
     ImFontAtlas* atlas = ImGui::GetIO().Fonts;
-    fonts.regular  = AddFace(atlas, L"segoeui.ttf", true);
-    fonts.semibold = AddFace(atlas, L"seguisb.ttf", true);
-    fonts.bold     = AddFace(atlas, L"segoeuib.ttf", false);
+    fonts.regular  = AddFace(atlas, { L"segoeui.ttf", L"arial.ttf", L"tahoma.ttf" }, true);
+    fonts.semibold = AddFace(atlas, { L"seguisb.ttf", L"arialbd.ttf", L"tahomabd.ttf" }, true);
+    fonts.bold     = AddFace(atlas, { L"segoeuib.ttf", L"arialbd.ttf", L"tahomabd.ttf" }, false);
     ImGui::GetIO().FontDefault = fonts.regular;
 }
 

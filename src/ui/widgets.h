@@ -5,7 +5,8 @@
 // Small widget kit on top of Dear ImGui (cards, buttons, toggles, toasts).
 namespace ui {
 
-enum class ButtonKind { Primary, Secondary, Outline, Danger, Ghost };
+/// Selected: no fill, bright text (used over a moving highlight, e.g. segmented tabs).
+enum class ButtonKind { Primary, Secondary, Outline, Danger, Ghost, Selected };
 
 /// Button with optional leading Lucide icon. size.x == 0 -> fit content, < 0 -> fill.
 bool Button(const char* label, const char* icon = nullptr, ButtonKind kind = ButtonKind::Secondary,

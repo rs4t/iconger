@@ -1,5 +1,6 @@
 #include "ui/widgets.h"
 #include "ui/theme.h"
+#include "ui/anim.h"
 #include <imgui_internal.h>
 #include <algorithm>
 #include <cmath>
@@ -25,6 +26,13 @@ static ImU32 Fade(ImU32 c, float a)
     return ImGui::ColorConvertFloat4ToU32(v);
 }
 
+static ImU32 Mix(ImU32 a, ImU32 b, float t)
+{
+    if (t <= 0) return a;
+    if (t >= 1) return b;
+    return ImGui::ColorConvertFloat4ToU32(ImLerp(ImGui::ColorConvertU32ToFloat4(a), ImGui::ColorConvertU32ToFloat4(b), t));
+}
+
 bool Button(const char* label, const char* icon, ButtonKind kind, ImVec2 size, bool enabled)
 {
     ImGuiStyle& st = ImGui::GetStyle();
@@ -45,18 +53,25 @@ bool Button(const char* label, const char* icon, ButtonKind kind, ImVec2 size, b
     bool pressed = ImGui::InvisibleButton("##btn", size);
     bool hovered = ImGui::IsItemHovered();
     bool held = ImGui::IsItemActive();
+    ImGuiID id = ImGui::GetItemID();
     ImGui::EndDisabled();
     ImGui::PopID();
 
-    ImU32 fill = 0, line = 0, fg = text;
+    // colours at rest and hovered; the hover glides between them
+    ImU32 fill0 = 0, fill1 = 0, line = 0, fg0 = text, fg1 = text;
     switch (kind) {
-    case ButtonKind::Primary:   fill = hovered ? primaryHover : primary; fg = onPrimary; break;
-    case ButtonKind::Secondary: fill = hovered ? accentBg : card; line = border; break;
-    case ButtonKind::Outline:   fill = hovered ? primarySoft : 0; line = primary; fg = primary; break;
-    case ButtonKind::Danger:    fill = hovered ? danger : dangerSoft; line = danger; fg = hovered ? IM_COL32_WHITE : danger; break;
-    case ButtonKind::Ghost:     fill = hovered ? accentBg : 0; fg = hovered ? text : textSecondary; break;
+    case ButtonKind::Primary:   fill0 = primary; fill1 = primaryHover; fg0 = fg1 = onPrimary; break;
+    case ButtonKind::Secondary: fill0 = card; fill1 = accentBg; line = border; break;
+    case ButtonKind::Outline:   fill0 = Fade(primarySoft, 0); fill1 = primarySoft; line = primary; fg0 = fg1 = primary; break;
+    case ButtonKind::Danger:    fill0 = dangerSoft; fill1 = danger; line = danger; fg0 = danger; fg1 = IM_COL32_WHITE; break;
+    case ButtonKind::Ghost:     fill0 = Fade(accentBg, 0); fill1 = accentBg; fg0 = textSecondary; fg1 = text; break;
+    case ButtonKind::Selected:  fg0 = fg1 = text; break;
     }
-    if (held) fill = Fade(fill ? fill : accentBg, 0.8f);
+    const float h = enabled ? anim::Smooth(id, hovered ? 1.0f : 0.0f, 16.0f) : 0.0f;
+    const float press = anim::Smooth(id + 1, held ? 1.0f : 0.0f, 28.0f);
+    ImU32 fill = (fill0 || fill1) ? Mix(fill0, fill1, h) : 0;
+    ImU32 fg = Mix(fg0, fg1, h);
+    if (held && fill) fill = Fade(fill, 0.85f);
     float alpha = enabled ? 1.0f : 0.4f;
     if (!enabled && kind == ButtonKind::Primary) {
         // a faded tangerine reads as muddy brown; show a neutral inactive button instead
@@ -65,9 +80,10 @@ bool Button(const char* label, const char* icon, ButtonKind kind, ImVec2 size, b
         alpha = 1.0f;
     }
 
+    anim::Block block = anim::Begin();
     ImDrawList* dl = ImGui::GetWindowDrawList();
     ImVec2 max(pos.x + size.x, pos.y + size.y);
-    if (fill) dl->AddRectFilled(pos, max, Fade(fill, alpha), st.FrameRounding);
+    if (fill && (fill >> IM_COL32_A_SHIFT)) dl->AddRectFilled(pos, max, Fade(fill, alpha), st.FrameRounding);
     if (line) dl->AddRect(pos, max, Fade(line, alpha), st.FrameRounding, S(1));
 
     float x = pos.x + (size.x - contentW) * 0.5f;
@@ -77,6 +93,9 @@ bool Button(const char* label, const char* icon, ButtonKind kind, ImVec2 size, b
         x += iconW + gap;
     }
     if (hasLabel) dl->AddText(ImVec2(x, y), Fade(fg, alpha), label, labelEnd);
+    // pressed buttons sink in a little
+    if (press > 0.0f)
+        anim::End(block, 1.0f, ImVec2(0, 0), 1.0f - 0.035f * press, ImVec2((pos.x + max.x) * 0.5f, (pos.y + max.y) * 0.5f));
     return pressed && enabled;
 }
 
@@ -398,9 +417,12 @@ bool RenderToasts()
         float textW = width - pad * 3 - fs;
         ImVec2 ts = ImGui::GetFont()->CalcTextSizeA(fs, FLT_MAX, textW, it->message.c_str());
         float h = std::max(ts.y, fs) + pad * 2;
-        float slide = (1.0f - in) * S(16);
-        ImVec2 p0(display.x - margin - width + slide, y - h);
-        ImVec2 p1(p0.x + width, y);
+        // springs in from the right; when one above it leaves, it glides down instead of jumping
+        float slide = (1.0f - anim::EaseOutBack(in, 1.2f)) * S(40);
+        ImGuiID key = ImHashData(&it->born, sizeof(it->born));
+        float top = anim::Smooth(key, y - h, 16.0f, y - h + S(12));
+        ImVec2 p0(display.x - margin - width + slide, top);
+        ImVec2 p1(p0.x + width, top + h);
 
         dl->AddRectFilled(ImVec2(p0.x + S(2), p0.y + S(4)), ImVec2(p1.x + S(2), p1.y + S(4)), Fade(IM_COL32(0, 0, 0, 90), a), S(12));
         dl->AddRectFilled(p0, p1, Fade(card, a), S(12));
@@ -409,6 +431,10 @@ bool RenderToasts()
         dl->AddText(ImVec2(p0.x + pad, p0.y + pad), Fade(col, a), icon);
         dl->AddText(ImGui::GetFont(), fs, ImVec2(p0.x + pad * 2 + fs, p0.y + pad), Fade(text, a),
                     it->message.c_str(), nullptr, textW);
+        // time left, as a thin line along the bottom edge
+        float left = 1.0f - (float)(age / kToastLife);
+        dl->AddRectFilled(ImVec2(p0.x + S(12), p1.y - S(3)), ImVec2(p0.x + S(12) + (width - S(24)) * left, p1.y - S(1)),
+                          Fade(col, a * 0.5f), S(1));
         y -= h + S(10);
     }
     return true;

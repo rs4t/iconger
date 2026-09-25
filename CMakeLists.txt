@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.20)
 #   MINOR  updates: new features, changes, semi-big stuff
 #   PATCH  small updates and fixes
 # Release tags are "v" + this, e.g. v0.2.1. The app shows a BETA badge while MAJOR is 0.
-project(iconger VERSION 0.5.0 LANGUAGES CXX RC)
+project(iconger VERSION 0.6.0 LANGUAGES CXX RC)
 set(ICONGER_VERSION_LABEL "${PROJECT_VERSION}")
 
 set(CMAKE_CXX_STANDARD 17)
@@ -90,8 +90,15 @@ target_link_libraries(iconger_core PUBLIC ole32 oleaut32 shell32 shlwapi user32 
 add_executable(iconger WIN32
     src/main.cpp
     src/app.cpp
+    src/app_editor.cpp
+    src/app_pinned.cpp
+    src/app_restore.cpp
+    src/app_settings.cpp
+    src/app_shell.cpp
+    src/app_update.cpp
     src/library_search.cpp
     src/gfx.cpp
+    src/ui/anim.cpp
     src/ui/theme.cpp
     src/ui/widgets.cpp
     src/iconger.manifest
