@@ -68,9 +68,9 @@ private:
     struct Applied {
         std::wstring exe;
         HICON origBig = nullptr, origSmall = nullptr;
-        HICON big = nullptr, small = nullptr;
+        HICON bigIcon = nullptr, smallIcon = nullptr;
     };
-    struct Icons { HICON big = nullptr; HICON small = nullptr; };
+    struct Icons { HICON bigIcon = nullptr; HICON smallIcon = nullptr; };
 
     void Apply(HWND hwnd);
     const Icons* IconsFor(const std::wstring& ico, UINT dpi);

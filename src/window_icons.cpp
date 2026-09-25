@@ -196,8 +196,8 @@ void WindowIconKeeper::Stop()
     }
     m_applied.clear();
     for (auto& [key, ic] : m_icons) {
-        if (ic.big) DestroyIcon(ic.big);
-        if (ic.small) DestroyIcon(ic.small);
+        if (ic.bigIcon) DestroyIcon(ic.bigIcon);
+        if (ic.smallIcon) DestroyIcon(ic.smallIcon);
     }
     m_icons.clear();
 }
@@ -213,12 +213,12 @@ const WindowIconKeeper::Icons* WindowIconKeeper::IconsFor(const std::wstring& ic
     auto it = m_icons.find(key);
     if (it != m_icons.end()) return &it->second;
     Icons ic;
-    int big = GetSystemMetricsForDpi(SM_CXICON, dpi), small = GetSystemMetricsForDpi(SM_CXSMICON, dpi);
-    ic.big = (HICON)LoadImageW(nullptr, ico.c_str(), IMAGE_ICON, big, big, LR_LOADFROMFILE);
-    ic.small = (HICON)LoadImageW(nullptr, ico.c_str(), IMAGE_ICON, small, small, LR_LOADFROMFILE);
-    if (!ic.big || !ic.small) {
-        if (ic.big) DestroyIcon(ic.big);
-        if (ic.small) DestroyIcon(ic.small);
+    int bigPx = GetSystemMetricsForDpi(SM_CXICON, dpi), smallPx = GetSystemMetricsForDpi(SM_CXSMICON, dpi);
+    ic.bigIcon = (HICON)LoadImageW(nullptr, ico.c_str(), IMAGE_ICON, bigPx, bigPx, LR_LOADFROMFILE);
+    ic.smallIcon = (HICON)LoadImageW(nullptr, ico.c_str(), IMAGE_ICON, smallPx, smallPx, LR_LOADFROMFILE);
+    if (!ic.bigIcon || !ic.smallIcon) {
+        if (ic.bigIcon) DestroyIcon(ic.bigIcon);
+        if (ic.smallIcon) DestroyIcon(ic.smallIcon);
         return nullptr;
     }
     return &(m_icons[key] = ic);
@@ -234,7 +234,7 @@ void WindowIconKeeper::Apply(HWND hwnd)
     if (!ico) return;
     const Icons* ic = IconsFor(*ico, GetDpiForWindow(hwnd));
     if (!ic) return;
-    if (it != m_applied.end() && it->second.big == ic->big && CurrentIcon(hwnd, ICON_BIG) == ic->big) return;
+    if (it != m_applied.end() && it->second.bigIcon == ic->bigIcon && CurrentIcon(hwnd, ICON_BIG) == ic->bigIcon) return;
 
     Applied a;
     if (it != m_applied.end()) {
@@ -246,16 +246,16 @@ void WindowIconKeeper::Apply(HWND hwnd)
     }
     DWORD_PTR r;
     SetLastError(0);
-    if (!SendMessageTimeoutW(hwnd, WM_SETICON, ICON_BIG, (LPARAM)ic->big, SMTO_ABORTIFHUNG, 200, &r)) {
+    if (!SendMessageTimeoutW(hwnd, WM_SETICON, ICON_BIG, (LPARAM)ic->bigIcon, SMTO_ABORTIFHUNG, 200, &r)) {
         // Windows won't let a normal program change the windows of one running as administrator
         if (GetLastError() == ERROR_ACCESS_DENIED &&
             std::find(m_blocked.begin(), m_blocked.end(), a.exe) == m_blocked.end())
             m_blocked.push_back(a.exe);
         return;
     }
-    SendMessageTimeoutW(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)ic->small, SMTO_ABORTIFHUNG, 200, &r);
-    a.big = ic->big;
-    a.small = ic->small;
+    SendMessageTimeoutW(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)ic->smallIcon, SMTO_ABORTIFHUNG, 200, &r);
+    a.bigIcon = ic->bigIcon;
+    a.smallIcon = ic->smallIcon;
     m_applied[hwnd] = a;
 }
 

@@ -4,10 +4,13 @@
 #     and push to master: the release and its tag are created from that commit;
 #   - push a tag vX.Y.Z: the notes come from that file if it exists, else from the
 #     annotated tag's message.
-# A version that already has a release is skipped.
+# A version that already has a release is skipped. It can also be started by hand
+# (Actions > release > Run workflow) on master, to release the version in CMakeLists.txt.
 name: release
 
 on:
+  # manual re-run, e.g. after a fix to a version whose notes were already pushed
+  workflow_dispatch:
   push:
     # releases come from master; both lists are needed (with only "tags", branch pushes
     # would never start it)
