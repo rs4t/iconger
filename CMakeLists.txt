@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.20)
 #   MINOR  updates: new features, changes, semi-big stuff
 #   PATCH  small updates and fixes
 # Release tags are "v" + this, e.g. v0.2.1. The app shows a BETA badge while MAJOR is 0.
-project(iconger VERSION 0.7.0 LANGUAGES CXX RC)
+project(iconger VERSION 0.8.0 LANGUAGES CXX RC)
 set(ICONGER_VERSION_LABEL "${PROJECT_VERSION}")
 
 set(CMAKE_CXX_STANDARD 17)
@@ -61,7 +61,16 @@ if(NOT EXISTS ${LUCIDE_TTF})
         EXPECTED_HASH SHA256=eaf30a2a0d2ec0cfbf7ab69ed6dc6e39b7e5e2f0255c17856dcb0b73a15584bb
         SHOW_PROGRESS)
 endif()
+# This version's release notes go into the exe for the "What's new" screen
+# (an empty file when there are none, and then the screen is skipped).
+set(ICONGER_NOTES_FILE ${CMAKE_SOURCE_DIR}/.github/release-notes/v${PROJECT_VERSION}.md)
+if(NOT EXISTS ${ICONGER_NOTES_FILE})
+    set(ICONGER_NOTES_FILE ${CMAKE_BINARY_DIR}/no-release-notes.md)
+    file(WRITE ${ICONGER_NOTES_FILE} "\n") # (some resource compilers reject an empty file)
+endif()
 configure_file(src/iconger.rc.in ${CMAKE_BINARY_DIR}/iconger.rc @ONLY)
+# rebuild the resources when the notes change
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${ICONGER_NOTES_FILE})
 
 # -------------------------------------------------------------------
 # Core library: everything that is not UI, so tests can link it too
@@ -76,12 +85,13 @@ add_library(iconger_core STATIC
     src/explorer_refresh.cpp
     src/settings.cpp
     src/updater.cpp
+    src/window_icons.cpp
     src/stb_impl.cpp
 )
 target_include_directories(iconger_core PUBLIC src ${stb_SOURCE_DIR} ${nanosvg_SOURCE_DIR}/src)
 target_compile_definitions(iconger_core PUBLIC UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
 target_compile_definitions(iconger_core PRIVATE "ICONGER_CORE_VERSION=L\"${ICONGER_VERSION_LABEL}\"")
-target_link_libraries(iconger_core PUBLIC ole32 oleaut32 shell32 shlwapi user32 gdi32 rstrtmgr winhttp propsys bcrypt
+target_link_libraries(iconger_core PUBLIC ole32 oleaut32 shell32 shlwapi user32 gdi32 rstrtmgr winhttp propsys bcrypt dwmapi version
     nlohmann_json::nlohmann_json)
 
 # -------------------------------------------------------------------

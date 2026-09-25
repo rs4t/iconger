@@ -124,6 +124,42 @@ void App::DrawUpdateStatus(float width)
     ImGui::PopFont();
 }
 
+// Release notes, lightly cleaned of markdown: headings, bullets, **bold** and `code` marks.
+void appui::DrawReleaseNotes(const std::string& markdown)
+{
+    ImGui::PushTextWrapPos(0);
+    size_t pos = 0;
+    const std::string& n = markdown;
+    while (pos < n.size()) {
+        size_t eol = n.find('\n', pos);
+        if (eol == std::string::npos) eol = n.size();
+        std::string line = n.substr(pos, eol - pos);
+        pos = eol + 1;
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (line.empty() || line.find("iconger.exe` below") != std::string::npos) continue;
+        for (const char* mark : { "**", "`" })
+            for (size_t m; (m = line.find(mark)) != std::string::npos;) line.erase(m, strlen(mark));
+        if (line.rfind("#", 0) == 0) {
+            line.erase(0, line.find_first_not_of("# "));
+            ImGui::Dummy(ImVec2(0, S(2)));
+            ImGui::PushFont(fonts.semibold, 0);
+            ImGui::TextUnformatted(line.c_str());
+            ImGui::PopFont();
+        } else if (line.rfind("- ", 0) == 0 || line.rfind("* ", 0) == 0) {
+            ImGui::PushStyleColor(ImGuiCol_Text, textDim);
+            ImGui::Bullet();
+            ImGui::SameLine();
+            ImGui::TextWrapped("%s", line.c_str() + 2);
+            ImGui::PopStyleColor();
+        } else {
+            ImGui::PushStyleColor(ImGuiCol_Text, textDim);
+            ImGui::TextWrapped("%s", line.c_str());
+            ImGui::PopStyleColor();
+        }
+    }
+    ImGui::PopTextWrapPos();
+}
+
 // ============================================================================
 // First run
 // ============================================================================
@@ -220,6 +256,7 @@ void App::DrawWelcome()
     }
     if (start) {
         m_settings.welcomed = true;
+        m_settings.lastSeenVersion = Utf8ToWide(ICONGER_VERSION); // no "What's new" for a first install
         m_settings.Save();
         if (m_settings.startMenuShortcut) EnsureStartMenuShortcut(ExePath());
         else RemoveStartMenuShortcut();
@@ -231,6 +268,89 @@ void App::DrawWelcome()
     float h = ImGui::GetCursorPosY() - top;
     if (std::fabs(h - m_welcomeHeight) > 1.0f) ui::KeepAnimating(0.1f);
     m_welcomeHeight = h;
+    ImGui::Dummy(ImVec2(0, S(16)));
+    ImGui::EndChild();
+}
+
+// ============================================================================
+// What's new (once after each update)
+// ============================================================================
+
+void App::DrawWhatsNew()
+{
+    anim::Scene("whatsnew");
+    ImGui::SetCursorPos(ImVec2(0, 0));
+    ImGui::BeginChild("##whatsnew", ImVec2(0, 0), 0, ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar);
+    const float winW = ImGui::GetWindowWidth(), winH = ImGui::GetWindowHeight();
+    const float colW = std::min(S(560), winW - S(48));
+    const float x0 = (winW - colW) * 0.5f;
+    const float top = std::max(m_titleH, (winH - m_whatsNewHeight) * 0.5f);
+    ImGui::SetCursorPos(ImVec2(x0, top));
+
+    auto centered = [&](const char* s, ImU32 col) {
+        ImGui::SetCursorPosX(x0 + std::max(0.0f, (colW - ImGui::CalcTextSize(s).x) * 0.5f));
+        ImGui::PushStyleColor(ImGuiCol_Text, col);
+        ImGui::TextUnformatted(s);
+        ImGui::PopStyleColor();
+    };
+    {
+        const float logo = S(56);
+        ImGui::SetCursorPosX(x0 + (colW - logo) * 0.5f);
+        ImVec2 lp = ImGui::GetCursorScreenPos();
+        anim::Block b = anim::Begin();
+        ui::Logo(logo);
+        float t = anim::Enter(0, 0.0f, 0.5f);
+        float s = anim::Enabled() ? 0.55f + 0.45f * anim::EaseOutBack(std::min(1.0f, anim::SceneTime() / 0.5f), 2.2f) : 1.0f;
+        anim::End(b, t, ImVec2(0, 0), s, ImVec2(lp.x + logo * 0.5f, lp.y + logo * 0.5f));
+    }
+    ImGui::Dummy(ImVec2(0, S(4)));
+    {
+        anim::Rise r(2);
+        ImGui::PushFont(fonts.bold, 26.0f);
+        centered("What's new in Iconger " ICONGER_VERSION, text);
+        ImGui::PopFont();
+    }
+    ImGui::SetCursorPosY(ImGui::GetCursorPosY() - S(4));
+    {
+        anim::Rise r(3);
+        centered("Iconger was updated. Here's what changed.", textSecondary);
+    }
+    ImGui::Dummy(ImVec2(0, S(10)));
+    {
+        anim::Rise r(4, 18.0f);
+        ImGui::SetCursorPosX(x0);
+        // the notes scroll inside the card if they're long
+        const float maxNotesH = std::max(S(160), winH - m_titleH - S(300));
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, card);
+        ImGui::PushStyleColor(ImGuiCol_Border, border);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(S(20), S(16)));
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, S(12));
+        ImGui::SetNextWindowSizeConstraints(ImVec2(colW, 0), ImVec2(colW, maxNotesH));
+        ImGui::BeginChild("##notes", ImVec2(colW, 0), ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding |
+                          ImGuiChildFlags_AutoResizeY);
+        ImGui::PopStyleVar(2);
+        ImGui::PopStyleColor(2);
+        DrawReleaseNotes(m_notes);
+        ImGui::EndChild();
+    }
+    ImGui::Dummy(ImVec2(0, S(8)));
+    bool done = false;
+    {
+        anim::Rise r(5);
+        ImGui::SetCursorPosX(x0);
+        done = ui::Button("Continue", ICON_ARROW_RIGHT, ui::ButtonKind::Primary, ImVec2(colW, S(42))) ||
+               ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_Escape);
+    }
+    if (done) {
+        m_showWhatsNew = false;
+        m_settings.lastSeenVersion = Utf8ToWide(ICONGER_VERSION);
+        m_settings.Save();
+        m_startedAt = ImGui::GetTime(); // the main window's menu rises in now
+    }
+
+    float h = ImGui::GetCursorPosY() - top;
+    if (std::fabs(h - m_whatsNewHeight) > 1.0f) ui::KeepAnimating(0.1f);
+    m_whatsNewHeight = h;
     ImGui::Dummy(ImVec2(0, S(16)));
     ImGui::EndChild();
 }

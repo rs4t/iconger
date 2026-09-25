@@ -136,7 +136,10 @@ inline std::wstring ExePath()
 }
 
 // Shell item to ask for a pin's icon: the .lnk, or the packaged app itself.
-inline std::wstring ShellPath(const PinnedShortcut& sc) { return sc.packaged ? AppsFolderPath(sc.aumid) : sc.lnkPath; }
+inline std::wstring ShellPath(const PinnedShortcut& sc)
+{
+    return sc.packaged ? AppsFolderPath(sc.aumid) : sc.running ? sc.targetPath : sc.lnkPath;
+}
 
 // The shortcut Iconger made for a packaged app that this pin was created from
 // (same name, same app ID), or empty.
@@ -150,7 +153,10 @@ inline std::wstring IcongerAppShortcut(const PinnedShortcut& sc)
 }
 
 // Stable identity of a pin across reloads.
-inline std::wstring EntryKey(const PinnedShortcut& sc) { return sc.packaged ? sc.aumid : sc.lnkPath; }
+inline std::wstring EntryKey(const PinnedShortcut& sc)
+{
+    return sc.packaged ? sc.aumid : sc.running ? L"run:" + WindowIconRules::Key(sc.targetPath) : sc.lnkPath;
+}
 
 // Right edge of the content region in window coordinates (GetContentRegionMax is gone in 1.92).
 inline float RightEdge() { return ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x; }
@@ -163,5 +169,8 @@ inline void SectionLabel(const char* label)
     ImGui::PopStyleColor();
     ImGui::PopFont();
 }
+
+/// Release notes, lightly cleaned of markdown (update dialog, "What's new").
+void DrawReleaseNotes(const std::string& markdown);
 
 } // namespace appui

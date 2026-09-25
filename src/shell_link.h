@@ -12,6 +12,8 @@ struct PinnedShortcut {
     bool         onTaskbar = true; // false = leftover file from an earlier pin; editing it does nothing
     std::wstring aumid;        // AppUserModelID: set on shortcuts to packaged apps
     bool         packaged = false; // pinned Store/MSIX app with no .lnk (lnkPath empty)
+    bool         running = false;  // EXPERIMENTAL: running app that isn't pinned (lnkPath empty,
+                                   // targetPath = the program, iconPath = its custom icon if any)
 };
 
 /// %APPDATA%\Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar

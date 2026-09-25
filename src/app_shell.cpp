@@ -27,12 +27,18 @@ void App::Frame()
         ImGuiWindowFlags_NoScrollWithMouse);
 
     m_titleH = TitleBarHeight();
-    if (!m_settings.welcomed) {
-        DrawWelcome();
+    if (!m_settings.welcomed || m_showWhatsNew) {
+        if (!m_settings.welcomed) DrawWelcome();
+        else DrawWhatsNew();
         ImGui::End();
         DrawWindowControls();
         ui::RenderToasts();
         return;
+    }
+    // the "Running now" list follows apps opening and closing (checked every 2 s)
+    if (m_runningDirty && m_page == Page::Pinned && m_editing < 0) {
+        m_runningDirty = false;
+        RefreshRunningApps();
     }
 
     float sidebarW = S(212);
@@ -202,7 +208,7 @@ void App::DrawSidebar(float width)
     struct Item { Page page; const char* icon; const char* label; int badge; };
     const Item items[] = {
         { Page::Pinned,   ICON_PIN,      "Pinned apps", 0 },
-        { Page::Restore,  ICON_HISTORY,  "Restore",     (int)m_backup.Entries().size() },
+        { Page::Restore,  ICON_HISTORY,  "Restore",     (int)(m_backup.Entries().size() + m_winRules.All().size()) },
         { Page::Settings, ICON_SETTINGS, "Settings",    0 },
     };
     ImDrawList* dl = ImGui::GetWindowDrawList();
@@ -402,6 +408,47 @@ void App::DrawModals()
         endModal();
     }
 
+    if (m_openEnableUnpinned) { ImGui::OpenPopup("##enableunpinned"); m_openEnableUnpinned = false; }
+    if (beginModal("##enableunpinned", 500.0f)) {
+        ui::IconTile(ICON_SPARKLES, violet, violetSoft, S(40));
+        ImGui::SameLine(0, S(14));
+        ImGui::BeginGroup();
+        ImGui::PushTextWrapPos(RightEdge());
+        ui::Heading("Turn on an experimental feature?",
+                    "Apps that aren't pinned can get a custom icon too, but this is still experimental.");
+        ImGui::PopTextWrapPos();
+        ImGui::EndGroup();
+        ImGui::Dummy(ImVec2(0, S(2)));
+        ImGui::PushTextWrapPos(RightEdge());
+        ImGui::PushStyleColor(ImGuiCol_Text, textDim);
+        ImGui::Bullet(); ImGui::SameLine();
+        ImGui::TextWrapped("Iconger swaps the icon of the app's windows while they're open, so it keeps running in the "
+                           "background: closing its window hides it (you'll see it in Task Manager).");
+        ImGui::Bullet(); ImGui::SameLine();
+        ImGui::TextWrapped("It starts with Windows, so your icons come back after a restart. You can turn that off in Settings.");
+        ImGui::Bullet(); ImGui::SameLine();
+        ImGui::TextWrapped("Some apps may flash their own icon for a moment, or not take the new one. Apps running as "
+                           "administrator can't be changed.");
+        ImGui::PopStyleColor();
+        ImGui::PopTextWrapPos();
+        ImGui::Dummy(ImVec2(0, S(4)));
+        float bw = (ImGui::GetContentRegionAvail().x - S(10)) * 0.5f;
+        if (ui::Button("Not now", nullptr, ui::ButtonKind::Secondary, ImVec2(bw, S(36))) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+            m_pendingOpenKey.clear();
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine(0, S(10));
+        if (ui::Button("Turn on", ICON_CHECK, ui::ButtonKind::Primary, ImVec2(bw, S(36)))) {
+            ImGui::CloseCurrentPopup();
+            SetUnpinnedIcons(true);
+            ui::Toast(ui::ToastKind::Success, "Turned on. Iconger now keeps running in the background.");
+            for (int i = 0; i < (int)m_entries.size(); ++i)
+                if (EntryKey(m_entries[i].sc) == m_pendingOpenKey) { OpenEditor(i); break; }
+            m_pendingOpenKey.clear();
+        }
+        endModal();
+    }
+
     if (m_openUpdate) { ImGui::OpenPopup("##update"); m_openUpdate = false; }
     if (beginModal("##update", 480.0f)) {
         const bool installing = m_update == UpdateState::Installing;
@@ -424,37 +471,7 @@ void App::DrawModals()
             ImGui::BeginChild("##notes", ImVec2(0, S(190)), ImGuiChildFlags_AlwaysUseWindowPadding);
             ImGui::PopStyleVar(2);
             ImGui::PopStyleColor();
-            ImGui::PushTextWrapPos(0);
-            size_t pos = 0;
-            const std::string& n = m_release.notes;
-            while (pos < n.size()) {
-                size_t eol = n.find('\n', pos);
-                if (eol == std::string::npos) eol = n.size();
-                std::string line = n.substr(pos, eol - pos);
-                pos = eol + 1;
-                if (!line.empty() && line.back() == '\r') line.pop_back();
-                if (line.empty() || line.find("iconger.exe` below") != std::string::npos) continue;
-                for (const char* mark : { "**", "`" })
-                    for (size_t m; (m = line.find(mark)) != std::string::npos;) line.erase(m, strlen(mark));
-                if (line.rfind("#", 0) == 0) {
-                    line.erase(0, line.find_first_not_of("# "));
-                    ImGui::Dummy(ImVec2(0, S(2)));
-                    ImGui::PushFont(fonts.semibold, 0);
-                    ImGui::TextUnformatted(line.c_str());
-                    ImGui::PopFont();
-                } else if (line.rfind("- ", 0) == 0 || line.rfind("* ", 0) == 0) {
-                    ImGui::PushStyleColor(ImGuiCol_Text, textDim);
-                    ImGui::Bullet();
-                    ImGui::SameLine();
-                    ImGui::TextWrapped("%s", line.c_str() + 2);
-                    ImGui::PopStyleColor();
-                } else {
-                    ImGui::PushStyleColor(ImGuiCol_Text, textDim);
-                    ImGui::TextWrapped("%s", line.c_str());
-                    ImGui::PopStyleColor();
-                }
-            }
-            ImGui::PopTextWrapPos();
+            DrawReleaseNotes(m_release.notes);
             ImGui::EndChild();
         }
 

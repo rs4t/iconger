@@ -8,6 +8,7 @@
 #include "settings.h"
 #include "shell_link.h"
 #include "updater.h"
+#include "window_icons.h"
 #include <windows.h>
 #include <atomic>
 #include <memory>
@@ -36,6 +37,17 @@ public:
 
     /// An update was installed: main should close the window and start the new exe.
     bool WantsRelaunch() const { return m_relaunch; }
+
+    // ---- running in the background (EXPERIMENTAL unpinned-app icons) ----
+    static constexpr UINT_PTR kKeeperTimerId = 7;
+    /// Closing the window only hides it: the icon keeper must keep running.
+    bool KeepsRunningInBackground() const { return m_settings.unpinnedIcons; }
+    /// "Quit Iconger completely" was chosen.
+    bool WantsQuit() const { return m_quit; }
+    /// The window was brought back from the background.
+    void OnShown();
+    /// Every ~2 s while the keeper runs (WM_TIMER).
+    void OnKeeperTimer();
 
     /// What's under a point (client pixels) of the custom title bar, for WM_NCHITTEST.
     enum class TitleHit { None, Caption, Minimize, Maximize, Close };
@@ -97,6 +109,10 @@ private:
     void ApplyToPackagedApp(const std::wstring& iconPath, int iconIndex);
     void RestoreOriginal(const std::wstring& lnkPath, bool quiet = false);
     void RestoreAll();
+    void RestoreRunningApp(const std::wstring& exe);
+    void SetUnpinnedIcons(bool enable);
+    void RefreshRunningApps();
+    void AddRunningApps();
     void RecycleLeftovers();
     void RequestRestart();
     void StartRestart();
@@ -126,6 +142,7 @@ private:
     void DrawSettingsPage();
     void DrawModals();
     void DrawWelcome();
+    void DrawWhatsNew();
     void HandleShortcuts();
 
     // updates
@@ -158,8 +175,22 @@ private:
     bool m_openRestoreAll = false;
     bool m_openCleanup = false;
     bool m_openPinGuide = false;
+    bool m_openEnableUnpinned = false;
+    std::wstring m_pendingOpenKey;  // app to open once the experimental feature is on
     std::wstring m_pinGuideLnk;   // shortcut made for a packaged app, waiting to be pinned
     std::string m_pinGuideName;
+
+    // EXPERIMENTAL: icons for running apps that aren't pinned
+    WindowIconRules m_winRules;
+    WindowIconKeeper m_keeper;
+    bool m_quit = false;
+    bool m_runningDirty = false;   // re-list running apps on the next frame
+    bool m_startsWithWindows = false;
+
+    // "What's new" after an update: this version's notes, built into the exe
+    std::string m_notes;
+    bool m_showWhatsNew = false;
+    float m_whatsNewHeight = 0;
 
     enum class UpdateState { Idle, Checking, UpToDate, Available, Installing, Failed };
     UpdateState m_update = UpdateState::Idle;

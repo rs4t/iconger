@@ -21,7 +21,8 @@ void App::DrawPinnedPage()
         ImGui::PopFont();
         ImGui::SetCursorPosY(ImGui::GetCursorPosY() - S(8));
         ImGui::PushStyleColor(ImGuiCol_Text, textSecondary);
-        size_t live = std::count_if(m_entries.begin(), m_entries.end(), [](const Entry& e) { return e.sc.onTaskbar; });
+        size_t live = std::count_if(m_entries.begin(), m_entries.end(),
+                                    [](const Entry& e) { return e.sc.onTaskbar && !e.sc.running; });
         ImGui::Text("%zu app%s on your taskbar. Pick one to change its icon.", live, live == 1 ? "" : "s");
         ImGui::PopStyleColor();
         ImGui::EndGroup();
@@ -59,13 +60,34 @@ void App::DrawPinnedPage()
     int cols = std::max(1, (int)((width + gap) / (S(240) + gap)));
     float cardW = std::floor((width - gap * (cols - 1)) / cols);
     int shown = 0;
-    for (int pass = 0; pass < 2; ++pass) {
-        const bool liveSection = pass == 0;
+    // sections: pins, running apps that aren't pinned (experimental), leftover shortcuts
+    auto section = [](const Entry& e) { return e.sc.running ? 1 : e.sc.onTaskbar ? 0 : 2; };
+    for (int pass = 0; pass < 3; ++pass) {
         int inSection = 0;
         for (int i = 0; i < (int)m_entries.size(); ++i) {
-            if (m_entries[i].sc.onTaskbar != liveSection) continue;
+            if (section(m_entries[i]) != pass) continue;
             if (!ContainsNoCase(U8(m_entries[i].sc.displayName), m_search)) continue;
-            if (!liveSection && inSection == 0) {
+            if (pass == 1 && inSection == 0) {
+                ImGui::Dummy(ImVec2(0, S(12)));
+                anim::Rise rise(1 + shown);
+                ImGui::BeginGroup();
+                ImGui::PushFont(fonts.semibold, fontH2);
+                ImGui::TextUnformatted("Running now");
+                ImGui::PopFont();
+                ImGui::SameLine(0, S(10));
+                ImGui::SetCursorPosY(ImGui::GetCursorPosY() + S(2));
+                ui::Badge("EXPERIMENTAL", violet, violetSoft);
+                ImGui::PushTextWrapPos(width);
+                ImGui::PushStyleColor(ImGuiCol_Text, textSecondary);
+                ImGui::SetCursorPosY(ImGui::GetCursorPosY() - S(6));
+                ImGui::TextWrapped(m_settings.unpinnedIcons
+                    ? "On your taskbar but not pinned. Their new icon comes back each time you open them, while Iconger runs in the background."
+                    : "On your taskbar but not pinned. Changing these needs an experimental feature: pick one to turn it on.");
+                ImGui::PopStyleColor();
+                ImGui::PopTextWrapPos();
+                ImGui::EndGroup();
+            }
+            if (pass == 2 && inSection == 0) {
                 // section header for shortcuts Windows orphaned on re-pin
                 ImGui::Dummy(ImVec2(0, S(12)));
                 anim::Rise rise(1 + shown);
@@ -146,8 +168,12 @@ void App::DrawAppCard(int index, float width)
         ImGui::PushStyleColor(ImGuiCol_Text, textMuted);
         ImGui::RenderTextEllipsis(dl, ImVec2(tx, y2), ImVec2(tx + textW, y2 + S(20)), tx + textW, sub.c_str(), nullptr, nullptr);
         ImGui::PopStyleColor();
+    } else if (IsCustomized(e) && e.sc.running && !m_settings.unpinnedIcons) {
+        dl->AddText(ImVec2(tx, y2), textMuted, "Custom icon (feature off)");
     } else if (IsCustomized(e)) {
         dl->AddText(ImVec2(tx, y2), success, ICON_CHECK " Custom icon");
+    } else if (e.sc.running) {
+        dl->AddText(ImVec2(tx, y2), textSecondary, "Running, not pinned");
     } else {
         std::string sub = e.sc.packaged ? "Store app" : e.sc.targetPath.empty() ? "Windows app"
                         : U8(FileStem(e.sc.targetPath) + LowerExt(e.sc.targetPath));
@@ -164,5 +190,13 @@ void App::DrawAppCard(int index, float width)
               ImVec2((p.x + q.x) * 0.5f, (p.y + q.y) * 0.5f));
 
     if (hovered) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-    if (clicked) OpenEditor(index);
+    if (clicked) {
+        if (e.sc.running && !m_settings.unpinnedIcons) {
+            // needs the experimental feature first: ask, then open it
+            m_pendingOpenKey = EntryKey(e.sc);
+            m_openEnableUnpinned = true;
+        } else {
+            OpenEditor(index);
+        }
+    }
 }

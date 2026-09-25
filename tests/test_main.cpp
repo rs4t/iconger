@@ -7,6 +7,7 @@
 #include "online_icons.h"
 #include "shell_link.h"
 #include "updater.h"
+#include "window_icons.h"
 #include <windows.h>
 #include <shlobj.h>
 #include <shellapi.h>
@@ -417,6 +418,41 @@ static void TestUpdater()
     CHECK(read(target) == "new");
 }
 
+static void TestWindowIcons()
+{
+    WindowIconRules r;
+    r.Load();
+    CHECK(r.All().empty());
+    r.Set(L"C:\\Program Files\\Discord\\Discord.exe", L"C:\\icons\\d.ico");
+    r.Set(L"C:\\apps\\Ünïcode.exe", L"C:\\icons\\u.ico");
+    CHECK(r.Save());
+    WindowIconRules back;
+    back.Load();
+    CHECK(back.All().size() == 2);
+    const std::wstring* ico = back.Get(L"c:\\program files\\DISCORD\\discord.EXE"); // case-insensitive
+    CHECK(ico && *ico == L"C:\\icons\\d.ico");
+    back.Remove(L"C:\\APPS\\ÜNÏCODE.EXE");
+    CHECK(back.All().size() == 1 && !back.Get(L"C:\\apps\\Ünïcode.exe"));
+
+    // a hidden window has no taskbar button; the program's name comes from its version info
+    WNDCLASSW wc = {};
+    wc.lpfnWndProc = DefWindowProcW;
+    wc.hInstance = GetModuleHandleW(nullptr);
+    wc.lpszClassName = L"IcongerTestWindow";
+    RegisterClassW(&wc);
+    HWND hidden = CreateWindowExW(0, wc.lpszClassName, L"x", WS_OVERLAPPEDWINDOW, 0, 0, 10, 10,
+                                  nullptr, nullptr, wc.hInstance, nullptr);
+    if (hidden) { // (no window without a desktop, e.g. some headless runners)
+        CHECK(!HasTaskbarButton(hidden));
+        wchar_t self[MAX_PATH];
+        GetModuleFileNameW(nullptr, self, MAX_PATH);
+        CHECK(_wcsicmp(WindowExePath(hidden).c_str(), self) == 0);
+        DestroyWindow(hidden);
+    }
+    CHECK(!ExeDisplayName(ExpandEnv(L"%SystemRoot%\\System32\\notepad.exe")).empty());
+    for (const RunningApp& a : EnumerateTaskbarApps()) CHECK(!a.exe.empty() && !a.windows.empty());
+}
+
 int wmain()
 {
     CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
@@ -438,6 +474,7 @@ int wmain()
     TestIconLibrariesOnline();
     TestBackup();
     TestUpdater();
+    TestWindowIcons();
 
     // best-effort cleanup
     SHFILEOPSTRUCTW op = {};

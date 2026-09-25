@@ -14,18 +14,116 @@ void App::Init(HWND hwnd, float dpiScale)
     m_startedAt = ImGui::GetTime();
     m_settings.Load();
     m_backup.Load();
+    m_winRules.Load();
     CleanupAfterUpdate(ExePath());
     ApplyStyle(dpiScale);
     Reload();
+
+    // "What's new": once per new version, with the notes built into this exe
+    if (HRSRC res = FindResourceW(nullptr, MAKEINTRESOURCEW(1002), RT_RCDATA)) {
+        if (HGLOBAL mem = LoadResource(nullptr, res))
+            m_notes.assign((const char*)LockResource(mem), SizeofResource(nullptr, res));
+    }
+    if (m_notes.find_first_not_of(" \t\r\n") == std::string::npos) m_notes.clear();
+    const std::wstring version = Utf8ToWide(ICONGER_VERSION);
+    if (m_settings.welcomed && m_settings.lastSeenVersion != version) {
+        m_showWhatsNew = !m_notes.empty();
+        if (!m_showWhatsNew) { m_settings.lastSeenVersion = version; m_settings.Save(); }
+    }
+
     // on the very first run these wait for the welcome screen's choices
     if (m_settings.welcomed) {
         if (m_settings.startMenuShortcut) EnsureStartMenuShortcut(ExePath());
         if (m_settings.checkUpdates) StartUpdateCheck(false);
     }
+
+    // EXPERIMENTAL: icons for running apps that aren't pinned
+    m_startsWithWindows = StartsWithWindows();
+    if (m_settings.unpinnedIcons) {
+        m_keeper.Start(&m_winRules);
+        // keep the login entry pointing at this exe (it may have been moved)
+        if (m_startsWithWindows) SetStartWithWindows(true, ExePath());
+    }
+    // re-applies icons apps put back, and refreshes the "Running now" list
+    SetTimer(m_hwnd, kKeeperTimerId, 2000, nullptr);
+}
+
+void App::OnKeeperTimer()
+{
+    m_keeper.Tick();
+    m_runningDirty = true;
+}
+
+void App::OnShown()
+{
+    Reload();
+    m_startedAt = ImGui::GetTime();
+    // the UI hasn't seen the mouse since the window was hidden; without this, a click
+    // before the mouse moves (e.g. on the close button it's resting on) would be missed
+    POINT pt;
+    if (GetCursorPos(&pt) && ScreenToClient(m_hwnd, &pt))
+        ImGui::GetIO().AddMousePosEvent((float)pt.x, (float)pt.y);
+}
+
+void App::SetUnpinnedIcons(bool enable)
+{
+    m_settings.unpinnedIcons = enable;
+    m_settings.Save();
+    if (enable) {
+        m_keeper.Start(&m_winRules);
+        // starts with Windows by default, so icons are back after a restart
+        m_startsWithWindows = SetStartWithWindows(true, ExePath());
+    } else {
+        m_keeper.Stop(); // every changed window gets its own icon back
+        SetStartWithWindows(false, ExePath());
+        m_startsWithWindows = false;
+    }
+    for (auto& e : m_entries)
+        if (e.sc.running) ReloadEntry(e);
+}
+
+// Running apps with a taskbar button that aren't pinned (listed even while the
+// experimental feature is off, so clicking one can offer to turn it on).
+void App::AddRunningApps()
+{
+    for (const RunningApp& app : EnumerateTaskbarApps()) {
+        bool pinned = std::any_of(m_entries.begin(), m_entries.end(), [&](const Entry& e) {
+            return !e.sc.running && e.sc.onTaskbar && _wcsicmp(e.sc.targetPath.c_str(), app.exe.c_str()) == 0; });
+        if (pinned) continue;
+        Entry e;
+        e.sc.running = true;
+        e.sc.displayName = app.name;
+        e.sc.targetPath = app.exe;
+        if (const std::wstring* ico = m_winRules.Get(app.exe)) e.sc.iconPath = *ico;
+        e.icon = LoadEntryIcon(e.sc, S(40));
+        m_entries.push_back(std::move(e));
+    }
+}
+
+void App::RefreshRunningApps()
+{
+    if (m_editing >= 0) return; // indexes must stay put while an app is open
+    std::vector<std::wstring> now, shown;
+    for (const RunningApp& app : EnumerateTaskbarApps()) now.push_back(WindowIconRules::Key(app.exe));
+    for (const auto& e : m_entries)
+        if (e.sc.running) shown.push_back(WindowIconRules::Key(e.sc.targetPath));
+    // apps that are pinned are listed as pins, not here
+    now.erase(std::remove_if(now.begin(), now.end(), [&](const std::wstring& exe) {
+        return std::any_of(m_entries.begin(), m_entries.end(), [&](const Entry& e) {
+            return !e.sc.running && e.sc.onTaskbar && WindowIconRules::Key(e.sc.targetPath) == exe; });
+    }), now.end());
+    std::sort(now.begin(), now.end());
+    std::sort(shown.begin(), shown.end());
+    if (now == shown) return;
+    m_entries.erase(std::remove_if(m_entries.begin(), m_entries.end(), [](const Entry& e) { return e.sc.running; }),
+                    m_entries.end());
+    AddRunningApps();
 }
 
 void App::Shutdown()
 {
+    KillTimer(m_hwnd, kKeeperTimerId);
+    m_keeper.Stop(); // windows get their own icons back before ours are destroyed
     if (m_restartThread.joinable()) m_restartThread.join();
     m_entries.clear();
     m_editingPreview.Reset();
@@ -83,6 +181,7 @@ void App::Reload()
         m_entries.push_back(std::move(e));
     }
     if (backupChanged) m_backup.Save();
+    AddRunningApps();
     m_editing = -1;
     if (!keepLnk.empty()) {
         for (int i = 0; i < (int)m_entries.size(); ++i)
@@ -94,12 +193,21 @@ void App::Reload()
 void App::ReloadEntry(Entry& e)
 {
     PinnedShortcut fresh;
-    if (!e.sc.packaged && ReadShortcut(e.sc.lnkPath, fresh)) e.sc = std::move(fresh);
+    if (e.sc.running) {
+        const std::wstring* ico = m_winRules.Get(e.sc.targetPath);
+        e.sc.iconPath = ico ? *ico : L"";
+    } else if (!e.sc.packaged && ReadShortcut(e.sc.lnkPath, fresh)) {
+        e.sc = std::move(fresh);
+    }
     e.icon = LoadEntryIcon(e.sc, S(40));
     if (m_editing >= 0 && &m_entries[m_editing] == &e) m_editingPreview = LoadEntryIcon(e.sc, S(96));
 }
 
-bool App::IsCustomized(const Entry& e) const { return !e.sc.packaged && m_backup.Has(e.sc.lnkPath); }
+bool App::IsCustomized(const Entry& e) const
+{
+    if (e.sc.running) return m_winRules.Get(e.sc.targetPath) != nullptr;
+    return !e.sc.packaged && m_backup.Has(e.sc.lnkPath);
+}
 
 bool App::IsBusy() const
 {
@@ -379,6 +487,24 @@ void App::ApplyCandidate()
         ApplyToPackagedApp(iconPath, iconIndex);
         return;
     }
+    if (e.sc.running) {
+        // EXPERIMENTAL: a rule for this program; its windows get the icon while Iconger runs
+        m_winRules.Set(e.sc.targetPath, iconPath);
+        if (!m_winRules.Save()) ui::Toast(ui::ToastKind::Warning, "Icon applied, but it couldn't be saved for next time.");
+        m_keeper.ApplyAll();
+        ReloadEntry(e);
+        m_cand = Candidate();
+        m_adjust = IconAdjust();
+        m_appliedAt = ImGui::GetTime();
+        m_appliedKey = EntryKey(e.sc);
+        const auto& blocked = m_keeper.Blocked();
+        if (std::find(blocked.begin(), blocked.end(), WindowIconRules::Key(e.sc.targetPath)) != blocked.end())
+            ui::Toast(ui::ToastKind::Warning, U8(e.sc.displayName) + " runs as administrator, so Windows won't let Iconger "
+                                              "change its icon.");
+        else
+            ui::Toast(ui::ToastKind::Success, "New icon applied to " + U8(e.sc.displayName) + ". It comes back each time you open it.");
+        return;
+    }
 
     if (!SetShortcutIcon(e.sc.lnkPath, iconPath, iconIndex)) {
         ui::Toast(ui::ToastKind::Error, "Couldn't save " + U8(e.sc.displayName) + ". Is the shortcut read-only?");
@@ -455,7 +581,23 @@ void App::RestoreAll()
     std::vector<std::wstring> keys;
     for (const auto& kv : m_backup.Entries()) keys.push_back(folder + L"\\" + kv.first);
     for (const auto& lnk : keys) RestoreOriginal(lnk, true);
-    ui::Toast(ui::ToastKind::Success, "Restored " + std::to_string(keys.size()) + " icon(s).");
+    std::vector<std::wstring> programs;
+    for (const auto& kv : m_winRules.All()) programs.push_back(kv.first);
+    for (const auto& exe : programs) RestoreRunningApp(exe);
+    ui::Toast(ui::ToastKind::Success, "Restored " + std::to_string(keys.size() + programs.size()) + " icon(s).");
+}
+
+void App::RestoreRunningApp(const std::wstring& exe)
+{
+    m_winRules.Remove(exe);
+    m_winRules.Save();
+    m_keeper.RestoreApp(exe);
+    for (auto& e : m_entries) {
+        if (!e.sc.running || _wcsicmp(e.sc.targetPath.c_str(), exe.c_str()) != 0) continue;
+        ReloadEntry(e);
+        m_appliedAt = ImGui::GetTime();
+        m_appliedKey = EntryKey(e.sc);
+    }
 }
 
 void App::RecycleLeftovers()

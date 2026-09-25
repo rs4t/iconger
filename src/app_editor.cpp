@@ -24,11 +24,18 @@ void App::DrawEditor()
         ImGui::SetCursorPosY(ImGui::GetCursorPosY() + S(8));
         // the badge flips to CUSTOM with a little pop when an icon is applied
         ImVec2 bp = ImGui::GetCursorScreenPos();
+        const float badgeY = ImGui::GetCursorPosY();
         anim::Block bb = anim::Begin();
         if (IsCustomized(e)) ui::Badge("CUSTOM ICON", success, successSoft);
         else ui::Badge("ORIGINAL ICON", textDim, accentBg);
         float pop = EntryKey(e.sc) == m_appliedKey ? Bump(m_appliedAt, 0.45f) : 0.0f;
         anim::End(bb, 1.0f, ImVec2(0, 0), 1.0f + 0.15f * pop, ImVec2(bp.x + S(50), bp.y + S(10)));
+        if (e.sc.running) {
+            ImGui::SameLine(0, S(6));
+            ImGui::SetCursorPosY(badgeY); // line up with the badge before it
+            ui::Badge("EXPERIMENTAL", violet, violetSoft);
+            ui::Tooltip("Not pinned: Iconger swaps the icon of this app's windows while it runs in the background.");
+        }
     }
 
     ImGui::Dummy(ImVec2(0, S(4)));
@@ -131,7 +138,7 @@ void App::DrawPreviewCard()
     int curIndex = 0;
     ResolveShortcutIcon(e.sc, curPath, curIndex);
     bool usesOwnIcon = curIndex == 0 && _wcsicmp(curPath.c_str(), e.sc.targetPath.c_str()) == 0;
-    bool canReset = !e.sc.packaged && (customized || (!e.sc.iconPath.empty() && !usesOwnIcon));
+    bool canReset = e.sc.running ? customized : !e.sc.packaged && (customized || (!e.sc.iconPath.empty() && !usesOwnIcon));
     if (m_cand) {
         if (ui::Button("Discard selection", ICON_X, ui::ButtonKind::Ghost, ImVec2(-1, 0))) {
             m_cand = Candidate();
@@ -139,7 +146,12 @@ void App::DrawPreviewCard()
         }
     } else if (ui::Button(customized ? "Restore original icon" : "Use the app's own icon", ICON_UNDO,
                           ui::ButtonKind::Secondary, ImVec2(-1, 0), canReset)) {
-        RestoreOriginal(e.sc.lnkPath);
+        if (e.sc.running) {
+            RestoreRunningApp(e.sc.targetPath);
+            ui::Toast(ui::ToastKind::Success, "Restored the original icon of " + U8(e.sc.displayName) + ".");
+        } else {
+            RestoreOriginal(e.sc.lnkPath);
+        }
     }
     if (!canReset && !m_cand)
         ui::Tooltip(e.sc.packaged ? "This pin already shows the app's own icon."
@@ -159,6 +171,7 @@ void App::DrawPreviewCard()
         ui::TextEllipsis(value.empty() ? "-" : value.c_str(), w, textDim);
     };
     if (e.sc.packaged) row("APP ID", U8(e.sc.aumid));
+    else if (e.sc.running) row("STATUS", "Running, not pinned");
     else row("SHORTCUT", U8(FileStem(e.sc.lnkPath)) + ".lnk");
     row("LAUNCHES", e.sc.targetPath.empty() ? "Windows / Store app" : U8(e.sc.targetPath));
     std::wstring iconPath;
@@ -170,6 +183,13 @@ void App::DrawPreviewCard()
         ImGui::PushStyleColor(ImGuiCol_Text, textSecondary);
         ImGui::TextWrapped("Store app: Iconger makes a shortcut with your icon, and you pin it in place of this one.");
         ImGui::PopStyleColor();
+    } else if (e.sc.running) {
+        ImGui::PushStyleColor(ImGuiCol_Text, textSecondary);
+        ImGui::TextWrapped("Experimental: the new icon shows on this app's taskbar button, title bar and Alt+Tab while "
+                           "Iconger runs. The program itself isn't changed.");
+        ImGui::PopStyleColor();
+        if (ui::Button("Show program in Explorer", ICON_EXTERNAL, ui::ButtonKind::Secondary, ImVec2(-1, 0)))
+            ShowInExplorer(e.sc.targetPath);
     } else if (ui::Button("Show shortcut in Explorer", ICON_EXTERNAL, ui::ButtonKind::Secondary, ImVec2(-1, 0))) {
         ShowInExplorer(e.sc.lnkPath);
     }

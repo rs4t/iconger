@@ -13,8 +13,10 @@ Change the icons of the apps pinned to your Windows 10/11 taskbar.
 - Every icon you apply is saved as a multi-size `.ico` (16-256 px, images padded to a square) in `%LOCALAPPDATA%\Iconger\icons`, so it stays sharp and keeps working after you delete the original file, or after an app update moves its `.exe`.
 - Every original icon is backed up before the first change, exactly as it was (including `%ProgramFiles%`-style paths). Restore one app or all of them from the Restore page. That includes Store apps you re-pinned through Iconger.
 - Finds the "leftover" shortcuts Windows leaves behind when you re-pin an app (`App.lnk` next to `App (2).lnk`). Editing those does nothing, so Iconger shows which one the taskbar actually uses.
+- **Experimental: apps that aren't pinned.** Apps that are on the taskbar only while they run show up under "Running now" and can get a custom icon too. Iconger swaps the icon of their windows (taskbar button, title bar, Alt+Tab) every time they open, so it keeps running in the background (visible in Task Manager, no tray icon) and starts with Windows. Off by default; turn it on in Settings or by picking one of those apps. Some apps may flash their own icon or not take the new one, and apps running as administrator can't be changed.
 - Keeps itself up to date: at startup it checks GitHub for a newer release and, if you say yes, downloads it (size and SHA-256 checked), swaps it in and restarts. Can be turned off in Settings.
-- Shows up in Windows search like any app (a Start menu shortcut, optional).
+- Shows up in Windows search like any app (a Start menu shortcut, optional). After each update it shows what's new.
+- Its own title bar, matching the app, with everything a normal window does (drag, snap, resize, Snap Layouts on Windows 11).
 - Smooth, quick animations throughout (pages, lists, dialogs, previews). They switch off when Windows' own "Animation effects" setting is off.
 - New icons show up on the taskbar right away. If one ever gets stuck, Settings has a one-click Explorer restart (via Restart Manager, so open folder windows come back) that can also clear the icon cache.
 
@@ -53,6 +55,7 @@ iconger.exe --open "Firefox" --icon "firefox.exe,10" --adjust "hue=-150,saturati
                                                     ...and with colour adjustments (hue, saturation,
                                                        brightness, contrast, tint)
 iconger.exe --page restore                          start on the Restore or Settings page
+iconger.exe --background                            start without a window (used when starting with Windows)
 ```
 
 Options can be given in any order.

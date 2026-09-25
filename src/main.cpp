@@ -18,6 +18,10 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND, UINT, WPARAM,
 static App g_app;
 static bool g_ready = false;
 
+// A second launch asks the running instance to show itself (it may be hidden in the background).
+static const UINT WM_APP_SHOW = WM_APP + 1;
+static const UINT_PTR kKeeperTimer = App::kKeeperTimerId;
+
 // The window draws its own title bar (see WM_NCCALCSIZE below). Keep the dark
 // variant for anything Windows still draws (borders, system menu), and on Windows 11
 // colour the 1 px border to match the app.
@@ -126,6 +130,21 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
     case WM_NCMOUSELEAVE:
         if (g_ready) g_app.SetMaximizePressed(false);
         break;
+    case WM_CLOSE:
+        // With custom icons for unpinned apps on, Iconger keeps running without a window
+        if (g_ready && g_app.KeepsRunningInBackground() && !g_app.WantsQuit()) {
+            ShowWindow(hwnd, SW_HIDE);
+            return 0;
+        }
+        break;
+    case WM_APP_SHOW:
+        ShowWindow(hwnd, IsIconic(hwnd) ? SW_RESTORE : SW_SHOW);
+        SetForegroundWindow(hwnd);
+        if (g_ready) g_app.OnShown();
+        return 0;
+    case WM_TIMER:
+        if (wParam == kKeeperTimer && g_ready) g_app.OnKeeperTimer();
+        return 0;
     case WM_SYSCOMMAND:
         if ((wParam & 0xfff0) == SC_KEYMENU) return 0; // Alt would freeze the loop in the menu
         break;
@@ -148,8 +167,11 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, PWSTR, int nCmdShow)
             other = FindWindowW(L"IcongerWindow", nullptr);
         }
         if (other) {
-            ShowWindow(other, SW_RESTORE);
-            SetForegroundWindow(other);
+            // let it take the foreground (it may be a background process without a window)
+            DWORD pid = 0;
+            GetWindowThreadProcessId(other, &pid);
+            AllowSetForegroundWindow(pid);
+            PostMessageW(other, WM_APP_SHOW, 0, 0);
         }
         return 0;
     }
@@ -197,14 +219,28 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, PWSTR, int nCmdShow)
     ImGui_ImplDX11_Init(GfxDevice(), GfxContext());
 
     g_app.Init(hwnd, ImGui_ImplWin32_GetDpiScaleForHwnd(hwnd));
+    bool background = false; // started with Windows: run without showing the window
     int argc = 0;
     if (wchar_t** argv = CommandLineToArgvW(GetCommandLineW(), &argc)) {
+        for (int i = 1; i < argc; ++i) background |= wcscmp(argv[i], L"--background") == 0;
         g_app.ApplyCommandLine(argc, argv);
         LocalFree(argv);
     }
     g_ready = true;
-    ShowWindow(hwnd, nCmdShow);
-    UpdateWindow(hwnd);
+    if (background && !g_app.KeepsRunningInBackground()) {
+        g_app.Shutdown(); // the feature was turned off since: nothing to do at login
+        ImGui_ImplDX11_Shutdown();
+        ImGui_ImplWin32_Shutdown();
+        ImGui::DestroyContext();
+        GfxShutdown();
+        DestroyWindow(hwnd);
+        CoUninitialize();
+        return 0;
+    }
+    if (!background) {
+        ShowWindow(hwnd, nCmdShow);
+        UpdateWindow(hwnd);
+    }
 
     // Render only while something happens: a few frames after each input so
     // hover/press states settle, continuously while loading or animating,
@@ -212,8 +248,12 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, PWSTR, int nCmdShow)
     int framesToRender = 3;
     bool running = true;
     while (running) {
+        // Hidden (running in the background) or minimized: nothing to draw, so sleep until a
+        // message arrives. Window events for the icon keeper come in as messages too.
+        const bool offscreen = !IsWindowVisible(hwnd) || IsIconic(hwnd);
         bool busy = framesToRender > 0 || g_app.IsBusy() || ImGui::GetIO().WantTextInput;
-        if (!busy) MsgWaitForMultipleObjects(0, nullptr, FALSE, 500, QS_ALLINPUT);
+        if (offscreen) MsgWaitForMultipleObjects(0, nullptr, FALSE, INFINITE, QS_ALLINPUT);
+        else if (!busy) MsgWaitForMultipleObjects(0, nullptr, FALSE, 500, QS_ALLINPUT);
 
         MSG msg;
         while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
@@ -223,7 +263,7 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, PWSTR, int nCmdShow)
             framesToRender = 3;
         }
         if (!running) break;
-        if (IsIconic(hwnd)) { Sleep(50); continue; }
+        if (!IsWindowVisible(hwnd) || IsIconic(hwnd)) continue;
 
         ImGui_ImplDX11_NewFrame();
         ImGui_ImplWin32_NewFrame();
@@ -237,7 +277,7 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, PWSTR, int nCmdShow)
 
         if (framesToRender > 0) --framesToRender;
         if (ImGui::IsAnyItemActive()) framesToRender = 3; // dragging a scrollbar etc.
-        if (g_app.WantsRelaunch()) running = false;
+        if (g_app.WantsRelaunch() || g_app.WantsQuit()) running = false;
     }
     const bool relaunch = g_app.WantsRelaunch();
 

@@ -29,6 +29,9 @@ void Settings::Load()
     wchar_t buf[64] = {};
     GetPrivateProfileStringW(L"iconger", L"skippedVersion", L"", buf, (DWORD)std::size(buf), SettingsFile().c_str());
     skippedVersion = buf;
+    GetPrivateProfileStringW(L"iconger", L"lastSeenVersion", L"", buf, (DWORD)std::size(buf), SettingsFile().c_str());
+    lastSeenVersion = buf;
+    unpinnedIcons     = ReadBool(L"unpinnedIcons", unpinnedIcons);
 }
 
 void Settings::Save() const
@@ -40,4 +43,6 @@ void Settings::Save() const
     WriteBool(L"checkUpdates", checkUpdates);
     WriteBool(L"welcomed", welcomed);
     WritePrivateProfileStringW(L"iconger", L"skippedVersion", skippedVersion.c_str(), SettingsFile().c_str());
+    WritePrivateProfileStringW(L"iconger", L"lastSeenVersion", lastSeenVersion.c_str(), SettingsFile().c_str());
+    WriteBool(L"unpinnedIcons", unpinnedIcons);
 }

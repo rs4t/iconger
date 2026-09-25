@@ -120,6 +120,57 @@ void App::DrawSettingsPage()
     ui::EndCard();
     card.reset();
 
+    card.emplace(cardIndex++, 18.0f);
+    ui::BeginCard("##experimental", ImVec2(maxW, 0), 20);
+    ui::IconTile(ICON_SPARKLES, violet, violetSoft, S(40));
+    ImGui::SameLine(0, S(14));
+    ImGui::BeginGroup();
+    ImGui::PushFont(fonts.semibold, fontH2);
+    ImGui::TextUnformatted("Apps that aren't pinned");
+    ImGui::PopFont();
+    ImGui::SameLine(0, S(10));
+    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + S(2));
+    ui::Badge("EXPERIMENTAL", violet, violetSoft);
+    ImGui::SetCursorPosY(ImGui::GetCursorPosY() - S(8));
+    ImGui::PushStyleColor(ImGuiCol_Text, textSecondary);
+    ImGui::TextWrapped("Custom icons for apps that are on the taskbar only while they run. Iconger swaps the icon of "
+                       "their windows, so it has to keep running in the background. Off by default while it's being "
+                       "tested: some apps may not take the new icon, or flash their own for a moment.");
+    ImGui::PopStyleColor();
+    ImGui::EndGroup();
+    ImGui::Separator();
+    {
+        bool on = m_settings.unpinnedIcons;
+        if (ui::SettingRow("Custom icons for apps that aren't pinned",
+                           "Adds them to Pinned apps under \"Running now\". Closing Iconger's window then keeps it "
+                           "running in the background (you'll see it in Task Manager).", &on))
+            SetUnpinnedIcons(on);
+    }
+    if (m_settings.unpinnedIcons) {
+        bool startup = m_startsWithWindows;
+        if (ui::SettingRow("Start with Windows",
+                           "Starts Iconger in the background when you sign in, so custom icons are back after a restart.",
+                           &startup)) {
+            if (!SetStartWithWindows(startup, ExePath())) ui::Toast(ui::ToastKind::Error, "Couldn't change the startup setting.");
+            m_startsWithWindows = StartsWithWindows();
+        }
+        if (!m_keeper.Blocked().empty()) {
+            std::string names;
+            for (const auto& exe : m_keeper.Blocked()) names += (names.empty() ? "" : ", ") + U8(ExeDisplayName(exe));
+            ImGui::PushTextWrapPos(0);
+            ImGui::PushStyleColor(ImGuiCol_Text, warning);
+            ImGui::TextWrapped(ICON_ALERT "  Windows didn't let Iconger change: %s (running as administrator).", names.c_str());
+            ImGui::PopStyleColor();
+            ImGui::PopTextWrapPos();
+        }
+        if (ui::Button("Quit Iconger completely", ICON_POWER, ui::ButtonKind::Secondary))
+            m_quit = true; // custom icons of unpinned apps go back to normal until Iconger runs again
+        ui::Tooltip("Stops Iconger, including in the background. Apps that aren't pinned get their own icons back "
+                    "until Iconger runs again.");
+    }
+    ui::EndCard();
+    card.reset();
+
     // a fallback: icons normally apply instantly, so this sits below the everyday settings
     ImGui::Spacing();
     card.emplace(cardIndex++, 18.0f);
