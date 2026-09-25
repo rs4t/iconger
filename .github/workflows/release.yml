@@ -1,7 +1,7 @@
 # Builds iconger.exe with MSVC, runs the tests on Windows and publishes a GitHub
 # release with the exe. Two ways to start it:
 #   - add .github/release-notes/vX.Y.Z.md (matching the version in CMakeLists.txt)
-#     and push: the release and its tag are created from that commit;
+#     and push to master: the release and its tag are created from that commit;
 #   - push a tag vX.Y.Z: the notes come from that file if it exists, else from the
 #     annotated tag's message.
 # A version that already has a release is skipped.
@@ -9,8 +9,9 @@ name: release
 
 on:
   push:
-    # both lists are needed: with only "tags", branch pushes would never start it
-    branches: ["**"]
+    # releases come from master; both lists are needed (with only "tags", branch pushes
+    # would never start it)
+    branches: [master]
     tags: ["v*"]
     paths: [".github/release-notes/**"] # ignored for tag pushes
 
