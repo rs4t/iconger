@@ -1,6 +1,11 @@
 #include "window_icons.h"
 #include "app_paths.h"
 #include <dwmapi.h>
+#include <propsys.h>
+#include <propkey.h>
+#include <propvarutil.h>
+#include <shellapi.h>
+#include <wrl/client.h>
 #include <algorithm>
 #include <cwchar>
 
@@ -166,6 +171,79 @@ void WindowIconRules::Set(const std::wstring& exe, const std::wstring& ico) { m_
 void WindowIconRules::Remove(const std::wstring& exe) { m_rules.erase(Key(exe)); }
 
 // ============================================================================
+// Window app identity (what the taskbar button shows)
+// ============================================================================
+
+namespace {
+
+// The ID goes last: Windows reads the relaunch properties when a window's ID changes.
+const PROPERTYKEY* const kIdentityKeys[4] = {
+    &PKEY_AppUserModel_RelaunchIconResource, &PKEY_AppUserModel_RelaunchCommand,
+    &PKEY_AppUserModel_RelaunchDisplayNameResource, &PKEY_AppUserModel_ID,
+};
+
+std::wstring* IdentityField(WindowIconKeeper::Identity& id, int i)
+{
+    std::wstring* f[4] = { &id.icon, &id.command, &id.name, &id.id };
+    return f[i];
+}
+
+} // namespace
+
+bool WindowIconKeeper::ReadIdentity(HWND hwnd, Identity& out)
+{
+    out = {};
+    Microsoft::WRL::ComPtr<IPropertyStore> store;
+    if (FAILED(SHGetPropertyStoreForWindow(hwnd, IID_PPV_ARGS(&store)))) return false;
+    for (int i = 0; i < 4; ++i) {
+        PROPVARIANT pv;
+        PropVariantInit(&pv);
+        if (SUCCEEDED(store->GetValue(*kIdentityKeys[i], &pv)) && pv.vt == VT_LPWSTR && pv.pwszVal)
+            *IdentityField(out, i) = pv.pwszVal;
+        PropVariantClear(&pv);
+    }
+    return true;
+}
+
+bool WindowIconKeeper::WriteIdentity(HWND hwnd, const Identity& identity)
+{
+    Microsoft::WRL::ComPtr<IPropertyStore> store;
+    if (FAILED(SHGetPropertyStoreForWindow(hwnd, IID_PPV_ARGS(&store)))) return false;
+    Identity copy = identity;
+    bool ok = true;
+    // Windows only uses the relaunch icon when the ID and all relaunch properties are set
+    // (Chrome sets them the same way for its profile windows). Empty = remove the property.
+    for (int i = 0; i < 4; ++i) {
+        PROPVARIANT pv;
+        PropVariantInit(&pv);
+        const std::wstring& v = *IdentityField(copy, i);
+        if (!v.empty() && FAILED(InitPropVariantFromString(v.c_str(), &pv))) { ok = false; continue; }
+        ok &= SUCCEEDED(store->SetValue(*kIdentityKeys[i], pv));
+        PropVariantClear(&pv);
+    }
+    return SUCCEEDED(store->Commit()) && ok;
+}
+
+std::wstring WindowIconKeeper::AppIdFor(const std::wstring& exe, const std::wstring& ico)
+{
+    std::wstring key = WindowIconRules::Key(exe) + L"|" + Lower(ico);
+    uint64_t h = 1469598103934665603ull; // FNV-1a
+    for (wchar_t c : key) { h ^= (uint64_t)c; h *= 1099511628211ull; }
+    wchar_t id[64];
+    swprintf_s(id, L"Iconger.CustomIcon.%016llx", (unsigned long long)h);
+    return id;
+}
+
+void WindowIconKeeper::RestoreWindow(HWND hwnd, const Applied& a)
+{
+    if (!IsWindow(hwnd)) return;
+    DWORD_PTR r;
+    SendMessageTimeoutW(hwnd, WM_SETICON, ICON_BIG, (LPARAM)a.origBig, SMTO_ABORTIFHUNG, 200, &r);
+    SendMessageTimeoutW(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)a.origSmall, SMTO_ABORTIFHUNG, 200, &r);
+    if (!a.appId.empty()) WriteIdentity(hwnd, a.origIdentity); // back to the app's own taskbar group
+}
+
+// ============================================================================
 // Keeper
 // ============================================================================
 
@@ -188,12 +266,7 @@ void WindowIconKeeper::Stop()
     if (g_keeper == this) g_keeper = nullptr;
     // Put the originals back before our icons are destroyed, or the windows would
     // be left pointing at freed icons.
-    for (auto& [hwnd, a] : m_applied) {
-        if (!IsWindow(hwnd)) continue;
-        DWORD_PTR r;
-        SendMessageTimeoutW(hwnd, WM_SETICON, ICON_BIG, (LPARAM)a.origBig, SMTO_ABORTIFHUNG, 200, &r);
-        SendMessageTimeoutW(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)a.origSmall, SMTO_ABORTIFHUNG, 200, &r);
-    }
+    for (auto& [hwnd, a] : m_applied) RestoreWindow(hwnd, a);
     m_applied.clear();
     for (auto& [key, ic] : m_icons) {
         if (ic.bigIcon) DestroyIcon(ic.bigIcon);
@@ -234,7 +307,12 @@ void WindowIconKeeper::Apply(HWND hwnd)
     if (!ico) return;
     const Icons* ic = IconsFor(*ico, GetDpiForWindow(hwnd));
     if (!ic) return;
-    if (it != m_applied.end() && it->second.bigIcon == ic->bigIcon && CurrentIcon(hwnd, ICON_BIG) == ic->bigIcon) return;
+    const std::wstring appId = AppIdFor(exe, *ico);
+    Identity current;
+    const bool haveIdentity = ReadIdentity(hwnd, current);
+    if (it != m_applied.end() && it->second.bigIcon == ic->bigIcon && CurrentIcon(hwnd, ICON_BIG) == ic->bigIcon &&
+        (!haveIdentity || current.id == appId))
+        return; // still ours
 
     Applied a;
     if (it != m_applied.end()) {
@@ -243,6 +321,7 @@ void WindowIconKeeper::Apply(HWND hwnd)
         a.exe = WindowIconRules::Key(exe);
         a.origBig = CurrentIcon(hwnd, ICON_BIG);
         a.origSmall = CurrentIcon(hwnd, ICON_SMALL);
+        if (haveIdentity) a.origIdentity = current;
     }
     DWORD_PTR r;
     SetLastError(0);
@@ -256,6 +335,17 @@ void WindowIconKeeper::Apply(HWND hwnd)
     SendMessageTimeoutW(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)ic->smallIcon, SMTO_ABORTIFHUNG, 200, &r);
     a.bigIcon = ic->bigIcon;
     a.smallIcon = ic->smallIcon;
+    // the taskbar button: give the window an identity of its own that carries the icon
+    if (haveIdentity && current.id != appId) {
+        Identity ours;
+        ours.id = appId;
+        ours.icon = *ico + L",0";
+        ours.command = L"\"" + exe + L"\"";
+        ours.name = ExeDisplayName(exe);
+        if (WriteIdentity(hwnd, ours)) a.appId = appId;
+    } else if (haveIdentity) {
+        a.appId = appId;
+    }
     m_applied[hwnd] = a;
 }
 
@@ -273,11 +363,7 @@ void WindowIconKeeper::RestoreApp(const std::wstring& exe)
     std::wstring key = WindowIconRules::Key(exe);
     for (auto it = m_applied.begin(); it != m_applied.end();) {
         if (it->second.exe != key) { ++it; continue; }
-        if (IsWindow(it->first)) {
-            DWORD_PTR r;
-            SendMessageTimeoutW(it->first, WM_SETICON, ICON_BIG, (LPARAM)it->second.origBig, SMTO_ABORTIFHUNG, 200, &r);
-            SendMessageTimeoutW(it->first, WM_SETICON, ICON_SMALL, (LPARAM)it->second.origSmall, SMTO_ABORTIFHUNG, 200, &r);
-        }
+        RestoreWindow(it->first, it->second);
         it = m_applied.erase(it);
     }
     m_blocked.erase(std::remove(m_blocked.begin(), m_blocked.end(), key), m_blocked.end());

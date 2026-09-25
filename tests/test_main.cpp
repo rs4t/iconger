@@ -23,6 +23,13 @@ static int g_failures = 0;
 
 static std::wstring g_tmp;
 
+// Wine's stand-ins for some shell APIs accept writes without keeping them.
+static bool RunningOnWine()
+{
+    HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
+    return ntdll && GetProcAddress(ntdll, "wine_get_version") != nullptr;
+}
+
 static bool HasOpaquePixel(const Image& img)
 {
     for (size_t i = 3; i < img.rgba.size(); i += 4) if (img.rgba[i] > 200) return true;
@@ -443,6 +450,23 @@ static void TestWindowIcons()
     HWND hidden = CreateWindowExW(0, wc.lpszClassName, L"x", WS_OVERLAPPEDWINDOW, 0, 0, 10, 10,
                                   nullptr, nullptr, wc.hInstance, nullptr);
     if (hidden) { // (no window without a desktop, e.g. some headless runners)
+        // the taskbar identity round-trips, and an empty field removes the property
+        WindowIconKeeper::Identity before, id, back;
+        if (!RunningOnWine() && WindowIconKeeper::ReadIdentity(hidden, before)) {
+            CHECK(before.id.empty());
+            id.id = WindowIconKeeper::AppIdFor(L"C:\\a\\App.exe", L"C:\\i\\x.ico");
+            CHECK(id.id == WindowIconKeeper::AppIdFor(L"c:\\A\\app.EXE", L"C:\\I\\X.ICO")); // case-insensitive
+            CHECK(id.id != WindowIconKeeper::AppIdFor(L"C:\\a\\App.exe", L"C:\\i\\y.ico"));
+            CHECK(id.id.size() < 128); // AppUserModelID limit
+            id.icon = L"C:\\i\\x.ico,0";
+            id.command = L"\"C:\\a\\App.exe\"";
+            id.name = L"App";
+            CHECK(WindowIconKeeper::WriteIdentity(hidden, id));
+            CHECK(WindowIconKeeper::ReadIdentity(hidden, back));
+            CHECK(back.id == id.id && back.icon == id.icon && back.command == id.command && back.name == id.name);
+            CHECK(WindowIconKeeper::WriteIdentity(hidden, before));
+            CHECK(WindowIconKeeper::ReadIdentity(hidden, back) && back.id.empty() && back.icon.empty());
+        }
         CHECK(!HasTaskbarButton(hidden));
         wchar_t self[MAX_PATH];
         GetModuleFileNameW(nullptr, self, MAX_PATH);

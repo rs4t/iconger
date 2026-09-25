@@ -5,9 +5,13 @@
 #include <vector>
 
 // EXPERIMENTAL: custom icons for apps that are on the taskbar without being pinned.
-// Their taskbar button shows the icon of the app's window, so Iconger replaces that
-// (WM_SETICON) while the window is open, and again for every new window of the app.
-// Nothing on disk changes; it only lasts while Iconger runs.
+// Two things are changed on each of the app's windows while it's open (and again for
+// every new window), nothing on disk:
+//  - the window icon (WM_SETICON): title bar and Alt+Tab;
+//  - the window's app identity (AppUserModelID + relaunch icon, like Chrome does for
+//    its profiles): the taskbar button. The taskbar picks its icon from the app's
+//    identity, not from the window icon.
+// It only lasts while Iconger runs.
 
 /// An app with at least one window that has a taskbar button.
 struct RunningApp {
@@ -65,11 +69,24 @@ public:
     const std::vector<std::wstring>& Blocked() const { return m_blocked; }
 
 private:
+public:
+    /// A window's app identity for the taskbar (empty = not set on the window).
+    struct Identity { std::wstring id, icon, command, name; };
+    static bool ReadIdentity(HWND hwnd, Identity& out);
+    static bool WriteIdentity(HWND hwnd, const Identity& identity);
+    /// The app ID Iconger gives the windows of `exe` shown with `ico` (unique per pair,
+    /// so the taskbar can't reuse an icon it cached for an earlier choice).
+    static std::wstring AppIdFor(const std::wstring& exe, const std::wstring& ico);
+
+private:
     struct Applied {
         std::wstring exe;
         HICON origBig = nullptr, origSmall = nullptr;
         HICON bigIcon = nullptr, smallIcon = nullptr;
+        Identity origIdentity;
+        std::wstring appId;       // ours
     };
+    static void RestoreWindow(HWND hwnd, const Applied& a);
     struct Icons { HICON bigIcon = nullptr; HICON smallIcon = nullptr; };
 
     void Apply(HWND hwnd);
