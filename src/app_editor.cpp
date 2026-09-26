@@ -201,6 +201,7 @@ void App::DrawAdjustPanel()
     ImGui::PushID("adjust");
     // when the first icon is picked, the controls cascade in row by row
     std::optional<anim::Rise> row(std::in_place, m_adjustAt, 0);
+    if (!m_cand.brandSvg.empty()) DrawBackgroundControls();
     float x0 = ImGui::GetCursorPosX(), w = ImGui::GetContentRegionAvail().x;
     SectionLabel("ADJUST");
     ImGui::SameLine(x0 + w - S(70));
@@ -546,9 +547,15 @@ void App::DrawThisAppTab(float height)
                 const LibraryIcon& ic = tiles[shown[hit]].icon;
                 Image master;
                 std::string err;
-                if (FetchLibraryIcon(ic, 256, master, err))
+                if (FetchLibraryIcon(ic, 256, master, err)) {
                     SetCandidatePixels(std::move(master), ic.Id(), std::string(LibraryName(ic.lib)) + ": " + ic.name);
-                else
+                    // Simple Icons: keep the logo, so its background can be changed
+                    std::string svg;
+                    if (ic.lib == IconLibrary::SimpleIcons && m_cand && FetchLibrarySvg(ic, svg, err)) {
+                        m_cand.brandSvg = std::move(svg);
+                        m_cand.tileColor = m_cand.brandColor = ic.brandRgb;
+                    }
+                } else
                     ui::Toast(ui::ToastKind::Error, "Couldn't load that icon: " + err);
             }
         }
@@ -616,4 +623,65 @@ void App::DrawIconGrid()
         }
     }
     ImGui::EndChild();
+}
+
+// Simple Icons are a logo on a tile we draw ourselves, so its shape and colour are ours
+// to change. (Tint can't make a black tile blue: it keeps the tile's own brightness.)
+void App::DrawBackgroundControls()
+{
+    ImGui::PushID("background");
+    SectionLabel("BACKGROUND");
+    bool changed = false;
+    struct Shape { TileShape shape; const char* label; };
+    const Shape shapes[] = { { TileShape::RoundedSquare, "Square" }, { TileShape::Circle, "Circle" }, { TileShape::None, "None" } };
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(S(9), S(4)));
+    ImGui::PushFont(nullptr, fontSmall);
+    for (int i = 0; i < 3; ++i) {
+        if (i) ImGui::SameLine(0, S(6));
+        bool on = m_cand.tileShape == shapes[i].shape;
+        if (ui::Button(shapes[i].label, nullptr, on ? ui::ButtonKind::Outline : ui::ButtonKind::Secondary)) {
+            m_cand.tileShape = shapes[i].shape;
+            changed = true;
+        }
+    }
+    ImGui::PopFont();
+    ImGui::PopStyleVar();
+    if (m_cand.tileShape == TileShape::None) {
+        ImGui::PushStyleColor(ImGuiCol_Text, textMuted);
+        ImGui::PushFont(nullptr, fontSmall);
+        ImGui::TextUnformatted("No background: the colour below is the logo's.");
+        ImGui::PopFont();
+        ImGui::PopStyleColor();
+    }
+
+    // colour: the brand's, a few useful ones, or any via the picker
+    auto toCol = [](uint32_t rgb) { return IM_COL32((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF, 255); };
+    const uint32_t colours[] = { m_cand.brandColor, 0x000000, 0xFFFFFF, 0x3B82F6, 0x22D3EE, 0x4CC38A,
+                                 0xFACC15, 0xFF8A3D, 0xEF4444, 0xEC4899, 0xA78BFA };
+    const float sw = S(24);
+    for (int i = 0; i < (int)std::size(colours); ++i) {
+        if (i) ImGui::SameLine(0, S(2));
+        ImGui::PushID(i);
+        if (ui::Swatch("##c", toCol(colours[i]), m_cand.tileColor == colours[i], sw)) {
+            m_cand.tileColor = colours[i];
+            changed = true;
+        }
+        if (i == 0) ui::Tooltip("Brand colour");
+        ImGui::PopID();
+    }
+    ImGui::SameLine(0, S(6));
+    ImVec4 custom((float)((m_cand.tileColor >> 16) & 0xFF) / 255, (float)((m_cand.tileColor >> 8) & 0xFF) / 255,
+                  (float)(m_cand.tileColor & 0xFF) / 255, 1);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, sw * 0.5f);
+    if (ImGui::ColorEdit3("##custom", &custom.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel |
+                                                 ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_PickerHueWheel)) {
+        m_cand.tileColor = (uint32_t)std::lround(custom.x * 255) << 16 | (uint32_t)std::lround(custom.y * 255) << 8 |
+                           (uint32_t)std::lround(custom.z * 255);
+        changed = true;
+    }
+    ImGui::PopStyleVar();
+    ui::Tooltip("Any colour");
+    ImGui::Dummy(ImVec2(0, S(4)));
+    if (changed) RedrawBrandTile();
+    ImGui::PopID();
 }

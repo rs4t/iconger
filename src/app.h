@@ -72,6 +72,11 @@ private:
         Image base96, base24;  // unadjusted preview sources
         Texture preview;
         Texture taskbar;       // taskbar-size preview
+        // Simple Icons: the logo and its background, so the background can be changed
+        std::string brandSvg;
+        uint32_t tileColor = 0;             // 0xRRGGBB (the brand colour at first)
+        uint32_t brandColor = 0;
+        TileShape tileShape = TileShape::RoundedSquare;
         explicit operator bool() const { return !path.empty() || !master.empty(); }
     };
 
@@ -102,11 +107,16 @@ private:
     void SetCandidatePixels(Image master, const std::string& id, const std::string& label);
     Image CandidateImage(int size) const;
     void RefreshCandidatePreview();
+    void RedrawBrandTile();
+    void DrawBackgroundControls();
     void CustomizeCurrentIcon();
     void HandlePickedFile(const std::wstring& path);
     void BrowseForIcon();
     void ApplyCandidate();
     void ApplyToPackagedApp(const std::wstring& iconPath, int iconIndex);
+    bool SetPinnedIcon(Entry& e, const std::wstring& iconPath, int iconIndex);
+    void ExportSetup();
+    void ImportSetup();
     void RestoreOriginal(const std::wstring& lnkPath, bool quiet = false);
     void RestoreAll();
     void RestoreRunningApp(const std::wstring& exe);
@@ -176,6 +186,10 @@ private:
     bool m_openCleanup = false;
     bool m_openPinGuide = false;
     bool m_openEnableUnpinned = false;
+    bool m_openImportResult = false;
+    int m_importApplied = 0;
+    std::vector<std::string> m_importSkipped;   // "Name: why"
+    bool m_importNeedsFeature = false;         // unpinned-app icons came in with the feature off
     std::wstring m_pendingOpenKey;  // app to open once the experimental feature is on
     std::wstring m_pinGuideLnk;   // shortcut made for a packaged app, waiting to be pinned
     std::string m_pinGuideName;

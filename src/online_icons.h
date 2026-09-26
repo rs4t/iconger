@@ -72,5 +72,13 @@ bool FetchLibraryIcon(const LibraryIcon& icon, int size, Image& out, std::string
 /// forceColor != 0 paints every shape in that colour (0xAABBGGRR).
 bool RenderSvg(const std::string& svg, int size, Image& out, uint32_t forceColor = 0);
 
-/// Rounded tile in brand colour with the glyph centred on it (Simple Icons style).
-Image MakeBrandTile(const std::string& glyphSvg, uint32_t brandRgb, int size);
+/// Background of a Simple Icons glyph.
+enum class TileShape { RoundedSquare, Circle, None };
+
+/// Simple Icons style: the glyph on a tile of colour `rgb` (0xRRGGBB), white or dark to
+/// stay readable. With TileShape::None there's no tile and the glyph itself takes `rgb`.
+Image MakeBrandTile(const std::string& glyphSvg, uint32_t rgb, int size, TileShape shape = TileShape::RoundedSquare);
+
+/// The SVG text of a library icon (downloaded and cached; theme symlinks followed).
+/// False for Dashboard Icons, which are PNGs.
+bool FetchLibrarySvg(const LibraryIcon& icon, std::string& svg, std::string& error);

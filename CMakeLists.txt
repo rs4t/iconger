@@ -33,14 +33,23 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(stb)
 
-# nanosvg - renders SVG icons from the online libraries (zlib license)
+# lunasvg - renders SVG icons from the online libraries (MIT; its plutovg is MIT too).
+# Handles what the icon themes use (inherited gradients, clip paths, masks, embedded
+# images). No system fonts, and no files other than data: URIs are ever loaded.
+set(LUNASVG_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(PLUTOVG_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(LUNASVG_DISABLE_LOAD_SYSTEM_FONTS ON CACHE BOOL "" FORCE)
+set(LUNASVG_DISABLE_EXTERNAL_RESOURCES ON CACHE BOOL "" FORCE)
+set(PLUTOVG_DISABLE_FONT_FACE_CACHE_LOAD ON CACHE BOOL "" FORCE)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(
-    nanosvg
-    GIT_REPOSITORY  https://github.com/memononen/nanosvg.git
-    GIT_TAG         239e102ec2c691f2902e20ace2ed36ee4a35cfe6
-    SOURCE_SUBDIR   headers-only # no such folder: download, but don't build its CMake project
+    lunasvg
+    GIT_REPOSITORY  https://github.com/sammycage/lunasvg.git
+    GIT_TAG         v3.5.0
+    GIT_SHALLOW     TRUE
 )
-FetchContent_MakeAvailable(nanosvg)
+FetchContent_MakeAvailable(lunasvg)
+
 
 # nlohmann/json - parses the icon library indexes (MIT)
 FetchContent_Declare(
@@ -86,13 +95,14 @@ add_library(iconger_core STATIC
     src/settings.cpp
     src/updater.cpp
     src/window_icons.cpp
+    src/setup_file.cpp
     src/stb_impl.cpp
 )
-target_include_directories(iconger_core PUBLIC src ${stb_SOURCE_DIR} ${nanosvg_SOURCE_DIR}/src)
+target_include_directories(iconger_core PUBLIC src ${stb_SOURCE_DIR})
 target_compile_definitions(iconger_core PUBLIC UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
 target_compile_definitions(iconger_core PRIVATE "ICONGER_CORE_VERSION=L\"${ICONGER_VERSION_LABEL}\"")
 target_link_libraries(iconger_core PUBLIC ole32 oleaut32 shell32 shlwapi user32 gdi32 rstrtmgr winhttp propsys bcrypt dwmapi version
-    nlohmann_json::nlohmann_json)
+    nlohmann_json::nlohmann_json lunasvg::lunasvg)
 
 # -------------------------------------------------------------------
 # Executable
@@ -104,6 +114,7 @@ add_executable(iconger WIN32
     src/app_pinned.cpp
     src/app_restore.cpp
     src/app_settings.cpp
+    src/app_setup.cpp
     src/app_shell.cpp
     src/app_update.cpp
     src/library_search.cpp

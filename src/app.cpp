@@ -290,6 +290,15 @@ Image App::CandidateImage(int size) const
     return img;
 }
 
+void App::RedrawBrandTile()
+{
+    if (m_cand.brandSvg.empty()) return;
+    m_cand.master = MakeBrandTile(m_cand.brandSvg, m_cand.tileColor, 256, m_cand.tileShape);
+    m_cand.base96 = MakeSquareResized(m_cand.master, (int)std::lround(S(96)));
+    m_cand.base24 = MakeSquareResized(m_cand.master, (int)std::lround(S(24)));
+    RefreshCandidatePreview();
+}
+
 void App::RefreshCandidatePreview()
 {
     Image large = m_cand.base96, tiny = m_cand.base24;
@@ -449,8 +458,6 @@ void App::ApplyCandidate()
 {
     if (m_editing < 0 || !m_cand) return;
     Entry& e = m_entries[m_editing];
-    IconBackupEntry original{ e.sc.iconPath, e.sc.iconIndex };
-
     // Every icon becomes a multi-size .ico of its own in the Iconger icons folder, so it
     // keeps working when the source is deleted or an update moves or renumbers the
     // icons of an .exe/.dll. Files that are already there (imports) are used as they are.
@@ -468,6 +475,8 @@ void App::ApplyCandidate()
             sizes.push_back(std::move(img));
         }
         std::string key = m_cand.id + "|" + WideToUtf8(m_cand.path) + "|" + std::to_string(m_cand.index) + "|" + m_adjust.Key();
+        if (!m_cand.brandSvg.empty()) // a different background is a different icon file
+            key += "|tile" + std::to_string((int)m_cand.tileShape) + "-" + std::to_string(m_cand.tileColor);
         uint64_t h = 1469598103934665603ull;
         for (unsigned char c : key) { h ^= c; h *= 1099511628211ull; }
         std::wstring name = Utf8ToWide(m_cand.id);
@@ -506,15 +515,10 @@ void App::ApplyCandidate()
         return;
     }
 
-    if (!SetShortcutIcon(e.sc.lnkPath, iconPath, iconIndex)) {
+    if (!SetPinnedIcon(e, iconPath, iconIndex)) {
         ui::Toast(ui::ToastKind::Error, "Couldn't save " + U8(e.sc.displayName) + ". Is the shortcut read-only?");
         return;
     }
-    m_backup.RecordIfMissing(e.sc.lnkPath, original);
-    if (!m_backup.Save())
-        ui::Toast(ui::ToastKind::Warning, "Icon applied, but the backup file couldn't be written.");
-
-    ReloadEntry(e);
     m_cand = Candidate();
     m_adjust = IconAdjust();
     m_appliedAt = ImGui::GetTime();
@@ -523,6 +527,18 @@ void App::ApplyCandidate()
     // restarting Explorer is only a manual fallback (Settings).
     SignalIconChange();
     ui::Toast(ui::ToastKind::Success, "New icon applied to " + U8(e.sc.displayName) + ".");
+}
+
+// Point a pin at an icon, backing up the original first (the first time only).
+bool App::SetPinnedIcon(Entry& e, const std::wstring& iconPath, int iconIndex)
+{
+    IconBackupEntry original{ e.sc.iconPath, e.sc.iconIndex };
+    if (!SetShortcutIcon(e.sc.lnkPath, iconPath, iconIndex)) return false;
+    m_backup.RecordIfMissing(e.sc.lnkPath, original);
+    if (!m_backup.Save())
+        ui::Toast(ui::ToastKind::Warning, "Icon applied, but the backup file couldn't be written.");
+    ReloadEntry(e);
+    return true;
 }
 
 void App::ApplyToPackagedApp(const std::wstring& iconPath, int iconIndex)

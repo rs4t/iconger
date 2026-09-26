@@ -9,8 +9,7 @@
 #include <future>
 #include <nlohmann/json.hpp>
 #include <stb_image.h>
-#include <nanosvg.h>
-#include <nanosvgrast.h>
+#include <lunasvg.h>
 
 using nlohmann::json;
 
@@ -356,42 +355,55 @@ std::vector<LibraryIcon> IconIndex::Search(const std::vector<std::string>& queri
 
 bool RenderSvg(const std::string& svg, int size, Image& out, uint32_t forceColor)
 {
-    std::string buf = svg; // nsvgParse writes into its input
-    NSVGimage* image = nsvgParse(buf.data(), "px", 96.0f);
-    if (!image) return false;
-    bool ok = false;
-    if (image->width > 0 && image->height > 0 && image->shapes) {
-        if (forceColor) {
-            for (NSVGshape* s = image->shapes; s; s = s->next) {
-                if (s->fill.type != NSVG_PAINT_NONE) { s->fill.type = NSVG_PAINT_COLOR; s->fill.color = forceColor; }
-                if (s->stroke.type != NSVG_PAINT_NONE) { s->stroke.type = NSVG_PAINT_COLOR; s->stroke.color = forceColor; }
-            }
-        }
-        NSVGrasterizer* rast = nsvgCreateRasterizer();
-        if (rast) {
-            float scale = std::min(size / image->width, size / image->height);
-            float tx = (size - image->width * scale) * 0.5f, ty = (size - image->height * scale) * 0.5f;
-            out.w = out.h = size;
-            out.rgba.assign((size_t)size * size * 4, 0);
-            nsvgRasterize(rast, image, tx, ty, scale, out.rgba.data(), size, size, size * 4);
-            nsvgDeleteRasterizer(rast);
-            ok = true;
+    // lunasvg: gradients that inherit from others, clip paths, masks and embedded images,
+    // which the icon themes use a lot (nanosvg skipped them, so some icons came out wrong)
+    auto doc = lunasvg::Document::loadFromData(svg);
+    if (!doc || doc->width() <= 0 || doc->height() <= 0 || size <= 0) return false;
+    // fit inside the square, keeping the aspect ratio
+    const float scale = std::min(size / doc->width(), size / doc->height());
+    const int w = std::max(1, (int)std::lround(doc->width() * scale));
+    const int h = std::max(1, (int)std::lround(doc->height() * scale));
+    lunasvg::Bitmap bmp = doc->renderToBitmap(w, h);
+    if (bmp.isNull()) return false;
+    bmp.convertToRGBA(); // straight (not premultiplied) RGBA, like Image
+
+    out.w = out.h = size;
+    out.rgba.assign((size_t)size * size * 4, 0);
+    const int ox = (size - w) / 2, oy = (size - h) / 2;
+    for (int y = 0; y < h; ++y)
+        memcpy(&out.rgba[((size_t)(y + oy) * size + ox) * 4], bmp.data() + (size_t)y * bmp.stride(), (size_t)w * 4);
+    if (forceColor) { // one flat colour (0xAABBGGRR), keeping the shape's edges
+        for (size_t i = 0; i < out.rgba.size(); i += 4) {
+            out.rgba[i] = (uint8_t)(forceColor & 0xFF);
+            out.rgba[i + 1] = (uint8_t)((forceColor >> 8) & 0xFF);
+            out.rgba[i + 2] = (uint8_t)((forceColor >> 16) & 0xFF);
         }
     }
-    nsvgDelete(image);
-    return ok;
+    return true;
 }
 
-Image MakeBrandTile(const std::string& glyphSvg, uint32_t brandRgb, int size)
+Image MakeBrandTile(const std::string& glyphSvg, uint32_t rgb, int size, TileShape shape)
 {
+    const uint8_t r = (rgb >> 16) & 0xFF, g = (rgb >> 8) & 0xFF, b = rgb & 0xFF;
+    const float lum = (0.2126f * r + 0.7152f * g + 0.0722f * b) / 255.0f;
     Image tile;
+    if (shape == TileShape::None) { // just the glyph, in the colour
+        int gs = std::max(8, (int)std::lround(size * 0.84f));
+        Image glyph;
+        tile.w = tile.h = size;
+        tile.rgba.assign((size_t)size * size * 4, 0);
+        if (!RenderSvg(glyphSvg, gs, glyph, 0xFF000000u | b << 16 | g << 8 | r)) return tile;
+        int off = (size - gs) / 2;
+        for (int y = 0; y < gs; ++y)
+            memcpy(&tile.rgba[((size_t)(y + off) * size + off) * 4], &glyph.rgba[(size_t)y * gs * 4], (size_t)gs * 4);
+        return tile;
+    }
+
     tile.w = tile.h = size;
     tile.rgba.assign((size_t)size * size * 4, 0);
-    const float r = (float)((brandRgb >> 16) & 0xFF), g = (float)((brandRgb >> 8) & 0xFF), b = (float)(brandRgb & 0xFF);
-    const float lum = (0.2126f * r + 0.7152f * g + 0.0722f * b) / 255.0f;
-
-    // rounded square, anti-aliased via a signed distance
-    const float margin = size * 0.06f, radius = size * 0.22f;
+    // the tile, anti-aliased via a signed distance
+    const float margin = size * 0.06f;
+    const float radius = shape == TileShape::Circle ? size * 0.5f - margin : size * 0.22f;
     const float half = size * 0.5f - margin, inner = half - radius;
     for (int y = 0; y < size; ++y) {
         for (int x = 0; x < size; ++x) {
@@ -399,13 +411,13 @@ Image MakeBrandTile(const std::string& glyphSvg, uint32_t brandRgb, int size)
             float dist = std::hypot(std::max(px, 0.0f), std::max(py, 0.0f)) + std::min(std::max(px, py), 0.0f) - radius;
             float cov = std::clamp(0.5f - dist, 0.0f, 1.0f);
             uint8_t* p = &tile.rgba[((size_t)y * size + x) * 4];
-            p[0] = (uint8_t)r; p[1] = (uint8_t)g; p[2] = (uint8_t)b; p[3] = (uint8_t)std::lround(cov * 255);
+            p[0] = r; p[1] = g; p[2] = b; p[3] = (uint8_t)std::lround(cov * 255);
         }
     }
 
-    // glyph: white, or near-black on very light brands so it stays visible
+    // glyph: white, or near-black on very light colours so it stays visible
     Image glyph;
-    int gs = std::max(8, (int)std::lround(size * 0.56f));
+    int gs = std::max(8, (int)std::lround(size * (shape == TileShape::Circle ? 0.5f : 0.56f)));
     uint32_t glyphColor = lum > 0.72f ? 0xFF211B1Bu : 0xFFFFFFFFu;
     if (RenderSvg(glyphSvg, gs, glyph, glyphColor)) {
         int off = (size - gs) / 2;
@@ -421,14 +433,29 @@ Image MakeBrandTile(const std::string& glyphSvg, uint32_t brandRgb, int size)
     return tile;
 }
 
+bool FetchLibrarySvg(const LibraryIcon& icon, std::string& svg, std::string& error)
+{
+    if (icon.lib == IconLibrary::Dashboard) return false; // PNGs
+    std::vector<uint8_t> data;
+    if (!CachedGet(icon.Url(), -1, data, error)) return false;
+    if (const ThemeSource* theme = FindTheme(icon.lib)) {
+        // Aliases in these repos are symlinks; the CDN serves them as a file holding the target's name.
+        for (int hop = 0; hop < 3 && data.size() < 200 && Str(data).find("<svg") == std::string::npos; ++hop) {
+            std::string target = Str(data);
+            target.erase(std::remove_if(target.begin(), target.end(), [](char c) { return c == '\n' || c == '\r' || c == ' '; }), target.end());
+            if (target.empty() || target.find('/') != std::string::npos) break;
+            if (!CachedGet(ThemeFileUrl(*theme, target), -1, data, error)) return false;
+        }
+    }
+    svg = Str(data);
+    return true;
+}
+
 bool FetchLibraryIcon(const LibraryIcon& icon, int size, Image& out, std::string& error)
 {
-    std::vector<uint8_t> data;
-    std::string url = icon.Url();
-    if (!CachedGet(url, -1, data, error)) return false;
-
-    switch (icon.lib) {
-    case IconLibrary::Dashboard: {
+    if (icon.lib == IconLibrary::Dashboard) {
+        std::vector<uint8_t> data;
+        if (!CachedGet(icon.Url(), -1, data, error)) return false;
         int w = 0, h = 0, n = 0;
         stbi_uc* px = stbi_load_from_memory(data.data(), (int)data.size(), &w, &h, &n, 4);
         if (!px) { error = "Broken image"; return false; }
@@ -439,22 +466,12 @@ bool FetchLibraryIcon(const LibraryIcon& icon, int size, Image& out, std::string
         out = MakeSquareResized(img, size);
         return true;
     }
-    case IconLibrary::SimpleIcons:
-        out = MakeBrandTile(Str(data), icon.brandRgb, size);
+    std::string svg;
+    if (!FetchLibrarySvg(icon, svg, error)) return false;
+    if (icon.lib == IconLibrary::SimpleIcons) {
+        out = MakeBrandTile(svg, icon.brandRgb, size);
         return !out.empty();
-    default: {
-        const ThemeSource* theme = FindTheme(icon.lib);
-        if (!theme) { error = "Unknown library"; return false; }
-        // Aliases in these repos are symlinks; the CDN serves them as a file holding the target's name.
-        for (int hop = 0; hop < 3 && data.size() < 200 && Str(data).find("<svg") == std::string::npos; ++hop) {
-            std::string target = Str(data);
-            target.erase(std::remove_if(target.begin(), target.end(), [](char c) { return c == '\n' || c == '\r' || c == ' '; }), target.end());
-            if (target.empty() || target.find('/') != std::string::npos) break;
-            if (!CachedGet(ThemeFileUrl(*theme, target), -1, data, error)) return false;
-        }
-        if (!RenderSvg(Str(data), size, out)) { error = "Broken SVG"; return false; }
-        return true;
     }
-    }
-    return false;
+    if (!RenderSvg(svg, size, out)) { error = "Broken SVG"; return false; }
+    return true;
 }

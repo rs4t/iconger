@@ -93,6 +93,23 @@ void App::DrawSettingsPage()
 
     ImGui::Spacing();
     card.emplace(cardIndex++, 18.0f);
+    ui::BeginCard("##setup", ImVec2(maxW, 0), 20);
+    ui::IconTile(ICON_ARCHIVE, primary, primarySoft, S(40));
+    ImGui::SameLine(0, S(14));
+    ImGui::BeginGroup();
+    ui::Heading("Back up or move your setup", "Saves every custom icon, and which app it belongs to, in one file. "
+                                              "Import it later, or on another PC, to get the same icons back.");
+    ImGui::EndGroup();
+    if (ui::Button("Export setup", ICON_UPLOAD, ui::ButtonKind::Outline)) ExportSetup();
+    ui::Tooltip("Save your icons to a .iconger file");
+    ImGui::SameLine(0, S(8));
+    if (ui::Button("Import setup", ICON_DOWNLOAD, ui::ButtonKind::Secondary)) ImportSetup();
+    ui::Tooltip("Apply the icons from a .iconger file. Originals are backed up first, as usual.");
+    ui::EndCard();
+    card.reset();
+
+    ImGui::Spacing();
+    card.emplace(cardIndex++, 18.0f);
     ui::BeginCard("##storage", ImVec2(maxW, 0), 20);
     ui::IconTile(ICON_FOLDER_OPEN, violet, violetSoft, S(40));
     ImGui::SameLine(0, S(14));

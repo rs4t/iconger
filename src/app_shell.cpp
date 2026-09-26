@@ -449,6 +449,48 @@ void App::DrawModals()
         endModal();
     }
 
+    if (m_openImportResult) { ImGui::OpenPopup("##importresult"); m_openImportResult = false; }
+    if (beginModal("##importresult", 460.0f)) {
+        const bool all = m_importSkipped.empty();
+        ui::IconTile(all ? ICON_CIRCLE_CHECK : ICON_INFO, all ? success : warning, all ? successSoft : warningSoft, S(40));
+        ImGui::SameLine(0, S(14));
+        ImGui::BeginGroup();
+        ImGui::PushTextWrapPos(RightEdge());
+        std::string title = "Imported " + std::to_string(m_importApplied) + " icon" + (m_importApplied == 1 ? "" : "s");
+        ui::Heading(title.c_str(), all ? "Every app in the setup got its icon."
+                                       : "Some apps in the setup couldn't be matched on this PC:");
+        ImGui::PopTextWrapPos();
+        ImGui::EndGroup();
+        if (!all) {
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, bg);
+            ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, S(10));
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(S(14), S(10)));
+            ImGui::BeginChild("##skipped", ImVec2(0, std::min(S(180), S(26) * (float)m_importSkipped.size() + S(20))),
+                              ImGuiChildFlags_AlwaysUseWindowPadding);
+            ImGui::PopStyleVar(2);
+            ImGui::PopStyleColor();
+            ImGui::PushTextWrapPos(0);
+            ImGui::PushStyleColor(ImGuiCol_Text, textDim);
+            for (const std::string& s : m_importSkipped) { ImGui::Bullet(); ImGui::SameLine(); ImGui::TextWrapped("%s", s.c_str()); }
+            ImGui::PopStyleColor();
+            ImGui::PopTextWrapPos();
+            ImGui::EndChild();
+        }
+        if (m_importNeedsFeature) {
+            ImGui::PushTextWrapPos(RightEdge());
+            ImGui::PushStyleColor(ImGuiCol_Text, textSecondary);
+            ImGui::TextWrapped("Icons for apps that aren't pinned were imported too. They're used once you turn on the "
+                               "experimental feature in Settings.");
+            ImGui::PopStyleColor();
+            ImGui::PopTextWrapPos();
+        }
+        ImGui::Dummy(ImVec2(0, S(2)));
+        if (ui::Button("Done", ICON_CHECK, ui::ButtonKind::Primary, ImVec2(-1, S(36))) ||
+            ImGui::IsKeyPressed(ImGuiKey_Escape) || ImGui::IsKeyPressed(ImGuiKey_Enter))
+            ImGui::CloseCurrentPopup();
+        endModal();
+    }
+
     if (m_openUpdate) { ImGui::OpenPopup("##update"); m_openUpdate = false; }
     if (beginModal("##update", 480.0f)) {
         const bool installing = m_update == UpdateState::Installing;

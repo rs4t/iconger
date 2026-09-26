@@ -9,8 +9,10 @@ Change the icons of the apps pinned to your Windows 10/11 taskbar.
 - **About 20,000 ready-made icons.** Every app gets matches from seven free icon libraries in different styles (full-colour logos, macOS-like, Windows-Fluent-like, flat, neon, brand tiles), searched by the app's name. Only the icons you look at are downloaded, and they're cached.
 - **The app's own alternatives**, e.g. Firefox ships about 15 icons inside `firefox.exe`.
 - **Your own files**: `.png` / `.jpg` / `.ico` / `.exe` / `.dll`, or drag and drop.
+- **Brand logos on any background**: Simple Icons logos sit on a square or round tile in any colour, or on no tile at all (then the logo takes the colour).
 - **Adjust any icon** before applying it: hue, saturation, brightness, contrast and tint, plus one-click looks (Mono, Vivid, Soft, Dark, Flip). Works on the icon an app already has, too.
 - Every icon you apply is saved as a multi-size `.ico` (16-256 px, images padded to a square) in `%LOCALAPPDATA%\Iconger\icons`, so it stays sharp and keeps working after you delete the original file, or after an app update moves its `.exe`.
+- **Export and import your setup**: one `.iconger` file with every custom icon inside, to back it up or get the same icons on another PC (Settings).
 - Every original icon is backed up before the first change, exactly as it was (including `%ProgramFiles%`-style paths). Restore one app or all of them from the Restore page. That includes Store apps you re-pinned through Iconger.
 - Finds the "leftover" shortcuts Windows leaves behind when you re-pin an app (`App.lnk` next to `App (2).lnk`). Editing those does nothing, so Iconger shows which one the taskbar actually uses.
 - **Experimental: apps that aren't pinned.** Apps that are on the taskbar only while they run show up under "Running now" and can get a custom icon too. Iconger swaps the icon of their windows (taskbar button, title bar, Alt+Tab) every time they open, so it keeps running in the background (visible in Task Manager, no tray icon) and starts with Windows. Off by default; turn it on in Settings or by picking one of those apps. Some apps may flash their own icon or not take the new one, and apps running as administrator can't be changed.
@@ -36,7 +38,7 @@ cmake --build build --config Release
 .\build\Release\iconger.exe
 ```
 
-Dear ImGui, stb, nanosvg, nlohmann/json and the Lucide icon font are fetched automatically (pinned versions).
+Dear ImGui, stb, lunasvg, nlohmann/json and the Lucide icon font are fetched automatically (pinned versions).
 
 Run the core tests with `ctest --test-dir build -C Release`. Set `ICONGER_NET_TESTS=1` to also test the online icon libraries (downloads icons, writes a contact sheet to `%TEMP%\iconger-online-sheet.png`).
 

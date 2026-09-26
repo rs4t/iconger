@@ -8,6 +8,7 @@
 #include "shell_link.h"
 #include "updater.h"
 #include "window_icons.h"
+#include "setup_file.h"
 #include <windows.h>
 #include <shlobj.h>
 #include <shellapi.h>
@@ -477,6 +478,69 @@ static void TestWindowIcons()
     for (const RunningApp& a : EnumerateTaskbarApps()) CHECK(!a.exe.empty() && !a.windows.empty());
 }
 
+static void TestSetupFile()
+{
+    // base64 round-trips every byte value and length
+    for (size_t n : { 0, 1, 2, 3, 4, 255, 256, 1000 }) {
+        std::vector<uint8_t> data(n), back;
+        for (size_t i = 0; i < n; ++i) data[i] = (uint8_t)(i * 7 + 3);
+        CHECK(Base64Decode(Base64Encode(data), back) && back == data);
+    }
+    CHECK(Base64Encode({ 'M', 'a', 'n' }) == "TWFu");
+
+    // an icon inside a DLL becomes a complete .ico
+    std::vector<uint8_t> ico;
+    CHECK(IcoFileBytes(ExpandEnv(L"%SystemRoot%\\System32\\shell32.dll"), 3, ico));
+    CHECK(ico.size() > 22 && ico[2] == 1 && ico[4] == 7); // type icon, 7 sizes
+
+    SetupItem pin;
+    pin.name = L"Fïrefox";
+    pin.shortcut = L"Firefox.lnk";
+    pin.program = L"firefox.exe";
+    pin.ico = ico;
+    SetupItem run;
+    run.name = L"Discord";
+    run.program = L"discord.exe";
+    run.programPath = L"C:\\Users\\x\\AppData\\Local\\Discord\\app-1\\Discord.exe";
+    run.unpinned = true;
+    run.ico = ico;
+    std::vector<SetupItem> back;
+    std::string err;
+    CHECK(ParseSetup(SerializeSetup({ pin, run }, "0.9.0"), back, err));
+    CHECK(back.size() == 2);
+    CHECK(back.size() == 2 && back[0].name == pin.name && back[0].shortcut == pin.shortcut && !back[0].unpinned &&
+          back[0].ico == ico);
+    CHECK(back.size() == 2 && back[1].unpinned && back[1].programPath == run.programPath);
+
+    CHECK(!ParseSetup("{\"hello\":1}", back, err) && !err.empty());
+    CHECK(!ParseSetup("{\"iconger\":99,\"apps\":[]}", back, err)); // from a newer, incompatible Iconger
+    // a damaged icon is skipped, not imported
+    CHECK(ParseSetup("{\"iconger\":1,\"apps\":[{\"name\":\"x\",\"ico\":\"AAAA\"}]}", back, err) && back.empty());
+}
+
+static void TestBrandTileShapes()
+{
+    const std::string glyph = R"(<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12"/></svg>)";
+    auto px = [](const Image& img, int x, int y) { return &img.rgba[((size_t)y * img.w + x) * 4]; };
+    Image sq = MakeBrandTile(glyph, 0x1E40AF, 64, TileShape::RoundedSquare);
+    Image ci = MakeBrandTile(glyph, 0x1E40AF, 64, TileShape::Circle);
+    Image no = MakeBrandTile(glyph, 0x1E40AF, 64, TileShape::None);
+    CHECK(sq.w == 64 && ci.w == 64 && no.w == 64);
+    // a square tile covers near its corner, a circle doesn't; neither covers the very edge
+    CHECK(px(sq, 10, 10)[3] > 200 && px(ci, 10, 10)[3] < 30);
+    CHECK(px(sq, 0, 0)[3] == 0 && px(ci, 0, 0)[3] == 0);
+    // on a dark tile the glyph is white; without a tile the glyph itself is the colour
+    CHECK(px(sq, 32, 32)[0] > 230 && px(sq, 32, 32)[1] > 230);
+    CHECK(px(no, 32, 32)[3] > 200 && px(no, 32, 32)[0] == 0x1E && px(no, 32, 32)[2] == 0xAF);
+    CHECK(px(no, 8, 32)[3] < 30); // and nothing around it
+    // lunasvg follows gradients that inherit their stops from another gradient
+    const std::string grad = R"svg(<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 10 10">
+        <defs><linearGradient id="a"><stop offset="0" stop-color="#0000ff"/><stop offset="1" stop-color="#0000ff"/></linearGradient>
+        <linearGradient id="b" xlink:href="#a"/></defs><rect width="10" height="10" fill="url(#b)"/></svg>)svg";
+    Image g;
+    CHECK(RenderSvg(grad, 16, g) && px(g, 8, 8)[2] > 200 && px(g, 8, 8)[3] > 200);
+}
+
 int wmain()
 {
     CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
@@ -499,6 +563,8 @@ int wmain()
     TestBackup();
     TestUpdater();
     TestWindowIcons();
+    TestSetupFile();
+    TestBrandTileShapes();
 
     // best-effort cleanup
     SHFILEOPSTRUCTW op = {};
