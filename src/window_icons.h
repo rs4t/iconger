@@ -68,8 +68,6 @@ public:
     /// Programs whose windows refused the icon (e.g. running as administrator).
     const std::vector<std::wstring>& Blocked() const { return m_blocked; }
 
-private:
-public:
     /// A window's app identity for the taskbar (empty = not set on the window).
     struct Identity { std::wstring id, icon, command, name; };
     static bool ReadIdentity(HWND hwnd, Identity& out);
