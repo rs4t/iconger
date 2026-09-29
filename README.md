@@ -2,9 +2,11 @@
 
 # Iconger
 
-Change the icons of the apps pinned to your Windows 10/11 taskbar. Website: [egorz.com/iconger](https://egorz.com/iconger/)
+Change the icons of the apps pinned to your Windows 10/11 taskbar.
 
-![Iconger's icon editor](assets/screenshot.png)
+**[Website](https://egorz.com/iconger/)** | **[Download iconger.exe](https://github.com/rs4t/iconger/releases/latest/download/iconger.exe)** | [All releases](https://github.com/rs4t/iconger/releases)
+
+[![Iconger's icon editor: Firefox's current icon next to a recoloured new one, colour sliders, and icons to choose from](assets/screenshot.png)](https://egorz.com/iconger/)
 
 - **About 20,000 ready-made icons.** Every app gets matches from seven free icon libraries in different styles (full-colour logos, macOS-like, Windows-Fluent-like, flat, neon, brand tiles), searched by the app's name. Only the icons you look at are downloaded, and they're cached.
 - **The app's own alternatives**, e.g. Firefox ships about 15 icons inside `firefox.exe`.
