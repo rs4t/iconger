@@ -2,7 +2,7 @@
 
 # Iconger
 
-Change the icons of the apps pinned to your Windows 10/11 taskbar.
+Change the icons of the apps pinned to your Windows 10/11 taskbar. Website: [egorz.com/iconger](https://egorz.com/iconger/)
 
 ![Iconger's icon editor](assets/screenshot.png)
 

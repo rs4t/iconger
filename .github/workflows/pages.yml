@@ -1,4 +1,5 @@
-# Publishes the website in site/ to GitHub Pages (https://rs4t.github.io/iconger/).
+# Publishes the website in site/ to GitHub Pages (rs4t.github.io/iconger/). Visitors use
+# https://egorz.com/iconger/, a Cloudflare Worker on egorz.com that forwards to GitHub Pages.
 # Runs when site/ changes on master, or by hand (Actions > pages > Run workflow).
 # One-time setup: Settings > Pages > Build and deployment > Source: "GitHub Actions".
 # Versions, changelog and download numbers are read live from the GitHub API by the
