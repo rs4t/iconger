@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Iconger: new icons for your Windows taskbar</title>
+  <meta name="description" content="Iconger changes the icons of the apps on your Windows 10 and 11 taskbar. About 20,000 ready-made icons, your own files, and every original backed up. Free and open source.">
+  <meta name="theme-color" content="#110f14">
+  <meta name="color-scheme" content="dark">
+  <meta property="og:title" content="Iconger: new icons for your taskbar">
+  <meta property="og:description" content="Change the icons of the apps on your Windows taskbar. Free and open source.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="https://rs4t.github.io/iconger/img/shots/editor.png">
+  <meta property="og:url" content="https://rs4t.github.io/iconger/">
+  <link rel="canonical" href="https://rs4t.github.io/iconger/">
+  <link rel="icon" href="img/iconger-256.png" type="image/png">
+  <link rel="preconnect" href="https://api.github.com" crossorigin>
+  <link rel="preload" href="fonts/Geist-Variable.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="styles.css">
+  <script>document.documentElement.classList.add('js')</script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="nav" id="top">
+    <div class="wrap nav-row">
+      <a class="brand" href="#top" aria-label="Iconger, back to top">
+        <img src="img/iconger-256.png" width="28" height="28" alt="">
+        <span translate="no">Iconger</span>
+      </a>
+      <nav class="nav-links" aria-label="Sections">
+        <a href="#features">Features</a>
+        <a href="#screenshots">Screenshots</a>
+        <a href="#libraries">Libraries</a>
+        <a href="#changelog">Changelog</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+      <div class="nav-actions">
+        <a class="stars" href="https://github.com/rs4t/iconger" aria-label="Iconger on GitHub">
+          <svg class="gh" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+          <span class="stars-count" data-stat="stars" aria-live="polite">GitHub</span>
+        </a>
+        <a class="btn btn-primary btn-sm" href="https://github.com/rs4t/iconger/releases/latest/download/iconger.exe" data-download>
+          <svg class="i" aria-hidden="true"><use href="icons.svg#i-document-download"/></svg>
+          Download
+        </a>
+      </div>
+    </div>
+  </header>
+  <div class="nav-sentinel" aria-hidden="true"></div>
+
+  <main id="main">
+    <!-- Hero -->
+    <section class="hero wrap">
+      <div class="hero-copy">
+        <h1 class="enter" style="--i:0">New icons for your taskbar.</h1>
+        <p class="lead enter" style="--i:1">About 20,000 ready-made icons, or your own, for any app pinned to your taskbar. Free for Windows 10 and 11.</p>
+        <div class="hero-cta enter" style="--i:2">
+          <a class="btn btn-primary btn-lg" href="https://github.com/rs4t/iconger/releases/latest/download/iconger.exe" data-download>
+            <svg class="i" aria-hidden="true"><use href="icons.svg#i-windows"/></svg>
+            Download for Windows
+          </a>
+          <a class="btn btn-ghost btn-lg" href="https://github.com/rs4t/iconger">View source</a>
+        </div>
+        <p class="release-meta enter" style="--i:3" data-release-meta>Single portable .exe, no installer</p>
+      </div>
+      <figure class="hero-shot shot-frame">
+        <!-- TODO screenshot: Icon editor, 2240x1480 PNG (see site/README.md) -->
+        <img src="img/shots/editor.png" width="1120" height="740" alt="Iconger's icon editor: Firefox's current icon next to the new one, colour sliders on the left and icons to choose from on the right." fetchpriority="high">
+      </figure>
+    </section>
+
+    <!-- Numbers -->
+    <section class="stats wrap" aria-label="Iconger in numbers">
+      <div class="stat reveal" style="--i:0">
+        <span class="stat-value" data-stat="downloads">&nbsp;</span>
+        <span class="stat-label">downloads</span>
+      </div>
+      <div class="stat reveal" style="--i:1">
+        <span class="stat-value" data-stat="stars-num">&nbsp;</span>
+        <span class="stat-label">stars on GitHub</span>
+      </div>
+      <div class="stat reveal" style="--i:2">
+        <span class="stat-value">7</span>
+        <span class="stat-label">free icon libraries</span>
+      </div>
+      <div class="stat reveal" style="--i:3">
+        <span class="stat-value">MIT</span>
+        <span class="stat-label">open source license</span>
+      </div>
+    </section>
+
+    <!-- How it works -->
+    <section class="section wrap" id="how" aria-labelledby="how-title">
+      <h2 id="how-title" class="reveal">Three clicks, no setup.</h2>
+      <div class="steps-wrap">
+      <ol class="steps">
+        <li class="step reveal" style="--i:0">
+          <span class="step-node"><svg class="i" aria-hidden="true"><use href="icons.svg#i-monitor"/></svg></span>
+          <h3>Pick an app</h3>
+          <p>Iconger lists everything pinned to your taskbar, with the icon each one has now.</p>
+        </li>
+        <li class="step reveal" style="--i:1">
+          <span class="step-node"><svg class="i" aria-hidden="true"><use href="icons.svg#i-search-normal"/></svg></span>
+          <h3>Choose an icon</h3>
+          <p>Matches from seven icon libraries, the app's own spare icons, or any file you have.</p>
+        </li>
+        <li class="step reveal" style="--i:2">
+          <span class="step-node"><svg class="i" aria-hidden="true"><use href="icons.svg#i-tick-circle"/></svg></span>
+          <h3>Apply</h3>
+          <p>The taskbar shows it right away. The original is backed up first, so you can always go back.</p>
+        </li>
+      </ol>
+      <div class="steps-line" aria-hidden="true"><span></span></div>
+      </div>
+    </section>
+
+    <!-- Features (bento) -->
+    <section class="section wrap" id="features" aria-labelledby="features-title">
+      <p class="eyebrow reveal">Features</p>
+      <h2 id="features-title" class="reveal">Everything an icon needs.</h2>
+      <div class="bento">
+        <article class="cell cell-adjust reveal" style="--i:0">
+          <div class="adjust-demo" aria-hidden="true">
+            <img class="adjust-img" loading="lazy" src="img/libraries/firefox-dashboard.svg" width="160" height="160" alt="">
+          </div>
+          <div class="cell-text">
+            <h3>Adjust any icon</h3>
+            <p>Hue, saturation, brightness, contrast and tint, or a one-click look. Even for the icon an app already has.</p>
+            <div class="chips" role="group" aria-label="Try a look on the Firefox icon">
+              <button type="button" class="chip" data-look="none" aria-pressed="true">Original</button>
+              <button type="button" class="chip" data-look="mono" aria-pressed="false">Mono</button>
+              <button type="button" class="chip" data-look="vivid" aria-pressed="false">Vivid</button>
+              <button type="button" class="chip" data-look="soft" aria-pressed="false">Soft</button>
+              <button type="button" class="chip" data-look="dark" aria-pressed="false">Dark</button>
+              <button type="button" class="chip" data-look="hue" aria-pressed="false">Hue -150°</button>
+            </div>
+          </div>
+        </article>
+
+        <article class="cell cell-brand reveal" style="--i:1">
+          <div class="brand-demo" aria-hidden="true">
+            <span class="brand-tile" data-shape="square" style="--tile:#5865F2">
+              <span class="glyph" style="--glyph:url(img/libraries/discord-simple.svg)"></span>
+            </span>
+          </div>
+          <div class="cell-text">
+            <h3>Brand logos, your colours</h3>
+            <p>Put a logo on a square or round tile in any colour, or drop the tile and colour the logo.</p>
+            <div class="swatches" role="group" aria-label="Tile colour">
+              <button type="button" class="swatch" style="--c:#5865F2" data-tile="#5865F2" aria-label="Brand blue" aria-pressed="true"></button>
+              <button type="button" class="swatch" style="--c:#eb459e" data-tile="#eb459e" aria-label="Pink" aria-pressed="false"></button>
+              <button type="button" class="swatch" style="--c:#ff8a3d" data-tile="#ff8a3d" aria-label="Tangerine" aria-pressed="false"></button>
+              <button type="button" class="swatch" style="--c:#4cc38a" data-tile="#4cc38a" aria-label="Green" aria-pressed="false"></button>
+            </div>
+            <div class="chips" role="group" aria-label="Tile shape">
+              <button type="button" class="chip" data-shape="square" aria-pressed="true">Square</button>
+              <button type="button" class="chip" data-shape="circle" aria-pressed="false">Circle</button>
+              <button type="button" class="chip" data-shape="none" aria-pressed="false">No tile</button>
+            </div>
+          </div>
+        </article>
+
+        <article class="cell cell-backup reveal" style="--i:2">
+          <svg class="i i-lg" aria-hidden="true"><use href="icons.svg#i-archive-tick"/></svg>
+          <h3>Every original, backed up</h3>
+          <p>Before the first change, exactly as it was. Restore one app or all of them from the Restore page.</p>
+        </article>
+
+        <article class="cell cell-files reveal" style="--i:3">
+          <svg class="i i-lg" aria-hidden="true"><use href="icons.svg#i-folder-open"/></svg>
+          <h3>The app's own icons, or yours</h3>
+          <p>Many apps ship spare icons (Firefox has about 15). Or drop in any file you like.</p>
+          <ul class="filetypes" aria-label="Supported files" translate="no">
+            <li>.png</li><li>.jpg</li><li>.ico</li><li>.exe</li><li>.dll</li>
+          </ul>
+        </article>
+
+        <article class="cell cell-move reveal" style="--i:4">
+          <svg class="i i-lg" aria-hidden="true"><use href="icons.svg#i-export-arrow-01"/></svg>
+          <h3>Take your setup along</h3>
+          <p>Export every custom icon to one file. Import it on another PC.</p>
+        </article>
+
+        <article class="cell cell-update reveal" style="--i:5">
+          <svg class="i i-lg" aria-hidden="true"><use href="icons.svg#i-refresh-circle"/></svg>
+          <h3>Stays up to date</h3>
+          <p>Asks before installing a new version, checks the download, and shows what's new.</p>
+        </article>
+
+        <article class="cell cell-running reveal" style="--i:6">
+          <svg class="i i-lg" aria-hidden="true"><use href="icons.svg#i-flash"/></svg>
+          <h3>Apps that aren't pinned <span class="badge">Experimental</span></h3>
+          <p>Give a new icon to apps that only show on the taskbar while they run. Off until you turn it on in Settings.</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- Screenshots -->
+    <section class="section wrap" id="screenshots" aria-labelledby="shots-title">
+      <h2 id="shots-title" class="reveal">A closer look.</h2>
+      <div class="tabs reveal" role="tablist" aria-label="Screenshots">
+        <button type="button" role="tab" id="tab-home" aria-controls="shot-panel" aria-selected="true" data-shot="0">Pinned apps</button>
+        <button type="button" role="tab" id="tab-editor" aria-controls="shot-panel" aria-selected="false" tabindex="-1" data-shot="1">Icon editor</button>
+        <button type="button" role="tab" id="tab-brand" aria-controls="shot-panel" aria-selected="false" tabindex="-1" data-shot="2">Brand logos</button>
+        <button type="button" role="tab" id="tab-restore" aria-controls="shot-panel" aria-selected="false" tabindex="-1" data-shot="3">Restore</button>
+        <button type="button" role="tab" id="tab-settings" aria-controls="shot-panel" aria-selected="false" tabindex="-1" data-shot="4">Settings</button>
+      </div>
+      <div class="shot-stage reveal" id="shot-panel" role="tabpanel" aria-labelledby="tab-home">
+        <figure class="shot-frame shots">
+          <!-- TODO screenshots: replace the placeholders below, 2240x1480 PNG each (see site/README.md) -->
+          <div class="shot is-on placeholder" data-caption="Everything pinned to your taskbar, with the icon each app has now.">
+            <span>Screenshot: Pinned apps page</span>
+          </div>
+          <img class="shot" src="img/shots/editor.png" width="1120" height="740" loading="lazy" alt="The icon editor for Firefox, with colour adjustments and icons to choose from." data-caption="Preview any icon next to the current one. Nothing changes until you press Apply.">
+          <div class="shot placeholder" data-caption="Simple Icons logos on a tile in any colour and shape.">
+            <span>Screenshot: Brand logo background controls</span>
+          </div>
+          <div class="shot placeholder" data-caption="Every original icon, ready to put back. One app or all at once.">
+            <span>Screenshot: Restore page</span>
+          </div>
+          <div class="shot placeholder" data-caption="Updates, start menu shortcut, export and import, and the experimental options.">
+            <span>Screenshot: Settings page</span>
+          </div>
+        </figure>
+        <p class="shot-caption" aria-live="polite">Everything pinned to your taskbar, with the icon each app has now.</p>
+      </div>
+    </section>
+
+    <!-- Libraries -->
+    <section class="section wrap" id="libraries" aria-labelledby="lib-title">
+      <p class="eyebrow reveal">Icon libraries</p>
+      <h2 id="lib-title" class="reveal">One app, seven styles.</h2>
+      <p class="section-lead reveal">Iconger searches seven free icon libraries by the app's name. Only the icons you look at are downloaded.</p>
+      <div class="app-switch reveal" role="group" aria-label="Show icons for">
+        <button type="button" class="chip" data-app="firefox" aria-pressed="true">Firefox</button>
+        <button type="button" class="chip" data-app="discord" aria-pressed="false">Discord</button>
+        <button type="button" class="chip" data-app="steam" aria-pressed="false">Steam</button>
+        <button type="button" class="chip" data-app="obsidian" aria-pressed="false">Obsidian</button>
+      </div>
+      <ul class="libs">
+        <li class="lib reveal" style="--i:0" data-lib="dashboard" data-brand="">
+          <span class="lib-icon"></span>
+          <a href="https://github.com/homarr-labs/dashboard-icons">Dashboard Icons</a>
+          <span class="lib-meta">Full-colour logos, Apache-2.0</span>
+        </li>
+        <li class="lib reveal" style="--i:1" data-lib="whitesur">
+          <span class="lib-icon"></span>
+          <a href="https://github.com/vinceliuice/WhiteSur-icon-theme">WhiteSur</a>
+          <span class="lib-meta">macOS-like, GPL-3.0</span>
+        </li>
+        <li class="lib reveal" style="--i:2" data-lib="fluent">
+          <span class="lib-icon"></span>
+          <a href="https://github.com/vinceliuice/Fluent-icon-theme">Fluent</a>
+          <span class="lib-meta">Windows-like, GPL-3.0</span>
+        </li>
+        <li class="lib reveal" style="--i:3" data-lib="papirus">
+          <span class="lib-icon"></span>
+          <a href="https://github.com/PapirusDevelopmentTeam/papirus-icon-theme">Papirus</a>
+          <span class="lib-meta">Flat, GPL-3.0</span>
+        </li>
+        <li class="lib reveal" style="--i:4" data-lib="tela">
+          <span class="lib-icon"></span>
+          <a href="https://github.com/vinceliuice/Tela-icon-theme">Tela</a>
+          <span class="lib-meta">Flat tiles, GPL-3.0</span>
+        </li>
+        <li class="lib reveal" style="--i:5" data-lib="candy">
+          <span class="lib-icon"></span>
+          <a href="https://github.com/EliverLara/candy-icons">Candy</a>
+          <span class="lib-meta">Neon gradients, GPL-3.0</span>
+        </li>
+        <li class="lib reveal" style="--i:6" data-lib="simple">
+          <span class="lib-icon"></span>
+          <a href="https://github.com/simple-icons/simple-icons">Simple Icons</a>
+          <span class="lib-meta">Brand tiles, CC0</span>
+        </li>
+      </ul>
+      <p class="fineprint reveal">Icons are made by the authors of each library and downloaded from them on demand, never bundled with Iconger. App logos are trademarks of their owners.</p>
+    </section>
+
+    <!-- Safety + requirements -->
+    <section class="section wrap safety" id="safety" aria-labelledby="safety-title">
+      <div class="safety-main">
+        <h2 id="safety-title" class="reveal">Safe to try.</h2>
+        <ul class="facts">
+          <li class="reveal" style="--i:0"><svg class="i" aria-hidden="true"><use href="icons.svg#i-archive-tick"/></svg><div><strong>Nothing is lost.</strong> Iconger only changes the icon of the taskbar shortcut. App files are never touched, and every original icon is backed up first.</div></li>
+          <li class="reveal" style="--i:1"><svg class="i" aria-hidden="true"><use href="icons.svg#i-lock"/></svg><div><strong>No installer, no admin rights.</strong> One portable file. Its settings and icons live in <code translate="no">%LOCALAPPDATA%\Iconger</code>.</div></li>
+          <li class="reveal" style="--i:2"><svg class="i" aria-hidden="true"><use href="icons.svg#i-code"/></svg><div><strong>Open source.</strong> Every line is on GitHub under the MIT license, and each release is built there from that code.</div></li>
+          <li class="reveal" style="--i:3"><svg class="i" aria-hidden="true"><use href="icons.svg#i-shield-tick"/></svg><div><strong>Checked updates.</strong> An update is only installed after you say yes, and only if its size and SHA-256 match.</div></li>
+        </ul>
+      </div>
+      <aside class="safety-side reveal" style="--i:2" aria-labelledby="req-title">
+        <h3 id="req-title">Requirements</h3>
+        <dl class="reqs">
+          <div><dt>Windows</dt><dd>10 or 11, 64-bit</dd></div>
+          <div><dt>Download</dt><dd data-release-size>About 3 MB</dd></div>
+          <div><dt>Internet</dt><dd>Only for icon libraries and update checks</dd></div>
+        </dl>
+        <h3 class="smartscreen-title">“Windows protected your PC”?</h3>
+        <p>Iconger isn't code-signed yet, so SmartScreen may warn you the first time. Click <strong>More info</strong>, then <strong>Run anyway</strong>.</p>
+      </aside>
+    </section>
+
+    <!-- Changelog -->
+    <section class="section wrap" id="changelog" aria-labelledby="changelog-title">
+      <h2 id="changelog-title" class="reveal">What's new.</h2>
+      <div class="releases" data-releases aria-busy="true">
+        <div class="release-skeleton" aria-hidden="true">
+          <span class="sk sk-title"></span><span class="sk"></span><span class="sk"></span><span class="sk sk-short"></span>
+        </div>
+        <div class="release-skeleton compact" aria-hidden="true"><span class="sk sk-row"></span></div>
+        <div class="release-skeleton compact" aria-hidden="true"><span class="sk sk-row"></span></div>
+      </div>
+      <button type="button" class="btn btn-ghost btn-sm releases-more" data-releases-more hidden></button>
+      <p class="releases-error" data-releases-error hidden>Couldn't load the release notes from GitHub right now. <a href="https://github.com/rs4t/iconger/releases">See every release on GitHub</a>.</p>
+      <a class="text-link" href="https://github.com/rs4t/iconger/releases">All releases on GitHub <svg class="i i-sm" aria-hidden="true"><use href="icons.svg#i-arrow-right-01"/></svg></a>
+    </section>
+
+    <!-- FAQ -->
+    <section class="section wrap faq" id="faq" aria-labelledby="faq-title">
+      <p class="eyebrow reveal">FAQ</p>
+      <h2 id="faq-title" class="reveal">Questions.</h2>
+      <div class="faq-list">
+        <details class="reveal">
+          <summary>Is Iconger free?</summary>
+          <div class="answer"><p>Yes. It's free and open source under the MIT license, with no ads, accounts or paid version.</p></div>
+        </details>
+        <details class="reveal">
+          <summary>Does it change the app itself?</summary>
+          <div class="answer"><p>No. It changes the icon of the app's taskbar shortcut, the same setting you'd find under the shortcut's Properties. The app's files stay exactly as they were.</p></div>
+        </details>
+        <details class="reveal">
+          <summary>How do I put an original icon back?</summary>
+          <div class="answer"><p>Open the Restore page and restore one app, or all of them at once. Iconger backs up every original before its first change.</p></div>
+        </details>
+        <details class="reveal">
+          <summary>Does it work with Microsoft Store apps?</summary>
+          <div class="answer"><p>Yes, with one extra step. A Store app's icon is locked inside its package, so Iconger makes a shortcut with your icon that opens the same app, then walks you through swapping the pin. Windows 11 doesn't let programs pin to the taskbar themselves.</p></div>
+        </details>
+        <details class="reveal">
+          <summary>Will my icons survive app updates?</summary>
+          <div class="answer"><p>Usually. Every icon you apply is kept as its own copy, so it still works when an update moves or replaces the app. A few updaters rewrite their taskbar shortcut, which resets the icon. Then pick your icon again, it's still in Iconger.</p></div>
+        </details>
+        <details class="reveal">
+          <summary>Does it run in the background?</summary>
+          <div class="answer"><p>Not by default. Only the experimental option for apps that aren't pinned keeps Iconger running, because it has to re-apply the icon each time those apps open. You'll see it in Task Manager, with no tray icon.</p></div>
+        </details>
+        <details class="reveal">
+          <summary>An icon didn't change on the taskbar. What now?</summary>
+          <div class="answer"><p>Windows sometimes holds on to an old icon. In Settings, restart Explorer in one click (open folders come back) and clear the icon cache if needed.</p></div>
+        </details>
+        <details class="reveal">
+          <summary>How do I uninstall it?</summary>
+          <div class="answer"><p>Restore your icons if you want the originals back, then delete <code translate="no">iconger.exe</code> and the folder <code translate="no">%LOCALAPPDATA%\Iconger</code>. If you turned on start with Windows, turn it off in Settings first.</p></div>
+        </details>
+      </div>
+    </section>
+
+    <!-- Closing CTA -->
+    <section class="closing wrap" aria-labelledby="closing-title">
+      <img class="closing-logo reveal" loading="lazy" src="img/iconger-256.png" width="72" height="72" alt="">
+      <h2 id="closing-title" class="reveal">Give your taskbar a new look.</h2>
+      <a class="btn btn-primary btn-lg reveal" href="https://github.com/rs4t/iconger/releases/latest/download/iconger.exe" data-download>
+        <svg class="i" aria-hidden="true"><use href="icons.svg#i-windows"/></svg>
+        Download for Windows
+      </a>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="wrap footer-row">
+      <a class="brand" href="#top" aria-label="Iconger, back to top">
+        <img src="img/iconger-256.png" width="24" height="24" alt="">
+        <span translate="no">Iconger</span>
+      </a>
+      <p>Made by <a href="https://github.com/rs4t">rs4t</a>. MIT license.</p>
+      <nav class="footer-links" aria-label="Links">
+        <a href="https://github.com/rs4t/iconger">GitHub</a>
+        <a href="https://github.com/rs4t/iconger/releases">Releases</a>
+        <a href="https://github.com/rs4t/iconger/issues">Report a problem</a>
+      </nav>
+    </div>
+  </footer>
+</body>
+</html>

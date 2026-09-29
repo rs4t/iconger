@@ -1,0 +1,36 @@
+# Publishes the website in site/ to GitHub Pages (https://rs4t.github.io/iconger/).
+# Runs when site/ changes on master, or by hand (Actions > pages > Run workflow).
+# One-time setup: Settings > Pages > Build and deployment > Source: "GitHub Actions".
+# Versions, changelog and download numbers are read live from the GitHub API by the
+# page itself, so a new release needs no redeploy.
+name: pages
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths: ["site/**", ".github/workflows/pages.yml"]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4
