@@ -10,7 +10,7 @@
   <meta property="og:title" content="Iconger: new icons for your taskbar">
   <meta property="og:description" content="Change the icons of the apps on your Windows taskbar. Free and open source.">
   <meta property="og:type" content="website">
-  <meta property="og:image" content="https://egorz.com/iconger/img/shots/editor.png">
+  <meta property="og:image" content="https://egorz.com/iconger/img/shots/editor.webp">
   <meta property="og:url" content="https://egorz.com/iconger/">
   <link rel="canonical" href="https://egorz.com/iconger/">
   <link rel="icon" href="img/iconger-256.png" type="image/png">
@@ -66,8 +66,7 @@
         <p class="release-meta enter" style="--i:3" data-release-meta>Single portable .exe, no installer</p>
       </div>
       <figure class="hero-shot shot-frame">
-        <!-- TODO screenshot: Icon editor, 2240x1480 PNG (see site/README.md) -->
-        <img src="img/shots/editor.png" width="1120" height="740" alt="Iconger's icon editor: Firefox's current icon next to the new one, colour sliders on the left and icons to choose from on the right." fetchpriority="high">
+        <img src="img/shots/editor.webp" width="1920" height="1270" alt="Iconger's icon editor: Firefox's current icon next to the new one, colour sliders on the left and icons to choose from on the right." fetchpriority="high">
       </figure>
     </section>
 
@@ -200,31 +199,37 @@
     <!-- Screenshots -->
     <section class="section wrap" id="screenshots" aria-labelledby="shots-title">
       <h2 id="shots-title" class="reveal">A closer look.</h2>
-      <div class="tabs reveal" role="tablist" aria-label="Screenshots">
-        <button type="button" role="tab" id="tab-home" aria-controls="shot-panel" aria-selected="true" data-shot="0">Pinned apps</button>
-        <button type="button" role="tab" id="tab-editor" aria-controls="shot-panel" aria-selected="false" tabindex="-1" data-shot="1">Icon editor</button>
-        <button type="button" role="tab" id="tab-brand" aria-controls="shot-panel" aria-selected="false" tabindex="-1" data-shot="2">Brand logos</button>
-        <button type="button" role="tab" id="tab-restore" aria-controls="shot-panel" aria-selected="false" tabindex="-1" data-shot="3">Restore</button>
-        <button type="button" role="tab" id="tab-settings" aria-controls="shot-panel" aria-selected="false" tabindex="-1" data-shot="4">Settings</button>
-      </div>
-      <div class="shot-stage reveal" id="shot-panel" role="tabpanel" aria-labelledby="tab-home">
-        <figure class="shot-frame shots">
-          <!-- TODO screenshots: replace the placeholders below, 2240x1480 PNG each (see site/README.md) -->
-          <div class="shot is-on placeholder" data-caption="Everything pinned to your taskbar, with the icon each app has now.">
-            <span>Screenshot: Pinned apps page</span>
-          </div>
-          <img class="shot" src="img/shots/editor.png" width="1120" height="740" loading="lazy" alt="The icon editor for Firefox, with colour adjustments and icons to choose from." data-caption="Preview any icon next to the current one. Nothing changes until you press Apply.">
-          <div class="shot placeholder" data-caption="Simple Icons logos on a tile in any colour and shape.">
-            <span>Screenshot: Brand logo background controls</span>
-          </div>
-          <div class="shot placeholder" data-caption="Every original icon, ready to put back. One app or all at once.">
-            <span>Screenshot: Restore page</span>
-          </div>
-          <div class="shot placeholder" data-caption="Updates, start menu shortcut, export and import, and the experimental options.">
-            <span>Screenshot: Settings page</span>
-          </div>
-        </figure>
-        <p class="shot-caption" aria-live="polite">Everything pinned to your taskbar, with the icon each app has now.</p>
+      <div class="shots-layout">
+        <div class="tabs reveal" role="tablist" aria-label="Screenshots" aria-orientation="vertical">
+          <button type="button" role="tab" id="tab-home" aria-controls="shot-panel" aria-selected="true" data-shot="0">
+            <span class="tab-title">Pinned apps</span>
+            <span class="tab-text"><span>Every app on your taskbar, and the ones running now.</span></span>
+            <span class="tab-progress" aria-hidden="true"></span>
+          </button>
+          <button type="button" role="tab" id="tab-editor" aria-controls="shot-panel" aria-selected="false" tabindex="-1" data-shot="1">
+            <span class="tab-title">Icon editor</span>
+            <span class="tab-text"><span>Preview any icon next to the current one. Nothing changes until you press Apply.</span></span>
+            <span class="tab-progress" aria-hidden="true"></span>
+          </button>
+          <button type="button" role="tab" id="tab-restore" aria-controls="shot-panel" aria-selected="false" tabindex="-1" data-shot="2">
+            <span class="tab-title">Restore</span>
+            <span class="tab-text"><span>Every original icon, ready to put back. One app or all at once.</span></span>
+            <span class="tab-progress" aria-hidden="true"></span>
+          </button>
+          <button type="button" role="tab" id="tab-settings" aria-controls="shot-panel" aria-selected="false" tabindex="-1" data-shot="3">
+            <span class="tab-title">Settings</span>
+            <span class="tab-text"><span>Updates, the Start menu entry, and export or import of your setup.</span></span>
+            <span class="tab-progress" aria-hidden="true"></span>
+          </button>
+        </div>
+        <div class="shot-stage reveal" id="shot-panel" role="tabpanel" aria-labelledby="tab-home">
+          <figure class="shot-frame shots">
+            <img class="shot is-on" src="img/shots/home.webp" width="1920" height="1270" loading="lazy" alt="The Pinned apps page: Claude, File Explorer and Obsidian with custom icons, and Firefox under Running now.">
+            <img class="shot" src="img/shots/editor.webp" width="1920" height="1270" loading="lazy" alt="The icon editor for Firefox: the current icon next to a recoloured new one, colour sliders, and icons to choose from.">
+            <img class="shot" src="img/shots/restore.webp" width="1920" height="1270" loading="lazy" alt="The Restore page listing four apps with a Restore button each, and Restore all.">
+            <img class="shot" src="img/shots/settings.webp" width="1920" height="1270" loading="lazy" alt="The Settings page: icon libraries, updates and Start menu, and export or import of your setup.">
+          </figure>
+        </div>
       </div>
     </section>
 

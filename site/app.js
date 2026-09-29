@@ -18,6 +18,20 @@
     new IntersectionObserver(([e]) => nav.classList.toggle('is-stuck', !e.isIntersecting)).observe(sentinel);
   }
 
+  // ---------- Headings: wrap each word so they can rise one after another ----------
+  $$('section h2.reveal').forEach((h) => {
+    const words = h.textContent.trim().split(/\s+/);
+    h.textContent = '';
+    words.forEach((word, i) => {
+      const w = document.createElement('span');
+      w.className = 'w';
+      w.style.setProperty('--w', i);
+      w.textContent = word;
+      h.append(w, i < words.length - 1 ? ' ' : '');
+    });
+    h.classList.add('split');
+  });
+
   // ---------- Scroll reveals ----------
   const onReveal = new Map(); // element -> callback run once when it comes into view
   const revealTargets = $$('.reveal, .steps-line');
@@ -41,26 +55,59 @@
     buttons.forEach((b) => b.setAttribute('aria-pressed', String(b === pressed)));
   }
 
+  // Demos play by themselves while in view, until the visitor picks something.
+  // Hovering or focusing a demo pauses it; reduced motion turns autoplay off.
+  function autoplay(root, ms, step) {
+    if (reduceMotion.matches || !('IntersectionObserver' in window)) return { stop() {} };
+    let visible = false, held = false, stopped = false, timer = 0;
+    const schedule = () => {
+      clearTimeout(timer);
+      if (!stopped && visible && !held) timer = setTimeout(() => { step(); schedule(); }, ms);
+    };
+    new IntersectionObserver(([e]) => { visible = e.isIntersecting; schedule(); }, { threshold: 0.5 }).observe(root);
+    root.addEventListener('pointerenter', () => { held = true; schedule(); });
+    root.addEventListener('pointerleave', () => { held = false; schedule(); });
+    root.addEventListener('focusin', () => { held = true; schedule(); });
+    root.addEventListener('focusout', () => { held = false; schedule(); });
+    return { stop() { stopped = true; clearTimeout(timer); } };
+  }
+
   // Adjust demo: one-click looks on the Firefox icon
   const adjustImg = $('.adjust-img');
   const lookButtons = $$('[data-look]');
-  lookButtons.forEach((b) => b.addEventListener('click', () => {
-    pressGroup(lookButtons, b);
-    adjustImg.dataset.look = b.dataset.look;
-  }));
+  const applyLook = (b) => { pressGroup(lookButtons, b); adjustImg.dataset.look = b.dataset.look; };
+  const lookAuto = autoplay($('.cell-adjust'), 1800, () => {
+    const i = lookButtons.findIndex((b) => b.getAttribute('aria-pressed') === 'true');
+    applyLook(lookButtons[(i + 1) % lookButtons.length]);
+  });
+  lookButtons.forEach((b) => b.addEventListener('click', () => { lookAuto.stop(); applyLook(b); }));
 
   // Brand tile demo: colour and shape
   const brandTile = $('.brand-tile');
   const swatches = $$('[data-tile]');
   const shapes = $$('.cell-brand [data-shape]').filter((el) => el.tagName === 'BUTTON');
-  swatches.forEach((b) => b.addEventListener('click', () => {
-    pressGroup(swatches, b);
-    brandTile.style.setProperty('--tile', b.dataset.tile);
-  }));
-  shapes.forEach((b) => b.addEventListener('click', () => {
-    pressGroup(shapes, b);
-    brandTile.dataset.shape = b.dataset.shape;
-  }));
+  const applyTile = (b) => { pressGroup(swatches, b); brandTile.style.setProperty('--tile', b.dataset.tile); };
+  const applyShape = (b) => { pressGroup(shapes, b); brandTile.dataset.shape = b.dataset.shape; };
+  let brandStep = 0;
+  const brandAuto = autoplay($('.cell-brand'), 1700, () => {
+    brandStep++;
+    applyTile(swatches[brandStep % swatches.length]);
+    applyShape(shapes[brandStep % shapes.length]);
+  });
+  swatches.forEach((b) => b.addEventListener('click', () => { brandAuto.stop(); applyTile(b); }));
+  shapes.forEach((b) => b.addEventListener('click', () => { brandAuto.stop(); applyShape(b); }));
+
+  // Soft light that follows the pointer over cards
+  if (window.matchMedia('(hover: hover)').matches) {
+    $$('.cell, .lib').forEach((card) => {
+      const target = card.classList.contains('lib') ? $('.lib-icon', card) : card;
+      card.addEventListener('pointermove', (e) => {
+        const r = target.getBoundingClientRect();
+        target.style.setProperty('--mx', (e.clientX - r.left) + 'px');
+        target.style.setProperty('--my', (e.clientY - r.top) + 'px');
+      });
+    });
+  }
 
   // ---------- One app, seven styles ----------
   // Simple Icons are one-colour logos: Iconger puts them on a tile in the brand's colour.
@@ -101,20 +148,28 @@
     slot.setAttribute('aria-label', APP_NAMES[APPS[0]] + ' icon from ' + libName);
   });
   const appButtons = $$('[data-app]').filter((el) => el.tagName === 'BUTTON');
-  appButtons.forEach((b) => b.addEventListener('click', () => {
+  const showApp = (b) => {
     pressGroup(appButtons, b);
     const app = b.dataset.app;
     libs.forEach((li) => {
       $$('.lib-icon > *', li).forEach((el) => el.classList.toggle('is-on', el.dataset.app === app));
       $('.lib-icon', li).setAttribute('aria-label', APP_NAMES[app] + ' icon from ' + $('a', li).textContent);
     });
-  }));
+  };
+  const appAuto = autoplay($('.libs'), 2600, () => {
+    const i = appButtons.findIndex((b) => b.getAttribute('aria-pressed') === 'true');
+    showApp(appButtons[(i + 1) % appButtons.length]);
+  });
+  appButtons.forEach((b) => b.addEventListener('click', () => { appAuto.stop(); showApp(b); }));
 
   // ---------- Screenshot tabs ----------
+  // While the section is in view the tabs advance by themselves: the active tab's
+  // progress bar fills, and when it ends the next tab opens. Hover pauses, a click stops it.
+  const tabList = $('.tabs');
   const tabs = $$('[role="tab"]');
   const shots = $$('.shots > .shot');
   const panel = $('#shot-panel');
-  const caption = $('.shot-caption');
+  let tabsStopped = reduceMotion.matches;
   function selectTab(tab, focus) {
     tabs.forEach((t) => {
       const on = t === tab;
@@ -122,22 +177,43 @@
       t.tabIndex = on ? 0 : -1;
     });
     const n = Number(tab.dataset.shot);
-    shots.forEach((s, i) => s.classList.toggle('is-on', i === n));
+    shots.forEach((s, i) => {
+      const was = s.classList.contains('is-on') && i !== n;
+      s.classList.toggle('is-on', i === n);
+      s.classList.toggle('was-on', was);
+    });
     panel.setAttribute('aria-labelledby', tab.id);
-    caption.textContent = shots[n].dataset.caption || '';
     if (focus) tab.focus();
   }
+  function stopTabs() {
+    tabsStopped = true;
+    tabList.classList.remove('is-playing', 'is-paused');
+  }
   tabs.forEach((t, i) => {
-    t.addEventListener('click', () => selectTab(t, false));
+    t.addEventListener('click', () => { stopTabs(); selectTab(t, false); });
     t.addEventListener('keydown', (e) => {
       let next = null;
-      if (e.key === 'ArrowRight') next = tabs[(i + 1) % tabs.length];
-      else if (e.key === 'ArrowLeft') next = tabs[(i - 1 + tabs.length) % tabs.length];
+      if (e.key === 'ArrowDown' || e.key === 'ArrowRight') next = tabs[(i + 1) % tabs.length];
+      else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') next = tabs[(i - 1 + tabs.length) % tabs.length];
       else if (e.key === 'Home') next = tabs[0];
       else if (e.key === 'End') next = tabs[tabs.length - 1];
-      if (next) { e.preventDefault(); selectTab(next, true); }
+      if (next) { e.preventDefault(); stopTabs(); selectTab(next, true); }
     });
   });
+  tabList.addEventListener('animationend', (e) => {
+    if (tabsStopped || !e.target.classList.contains('tab-progress')) return;
+    const i = tabs.findIndex((t) => t.getAttribute('aria-selected') === 'true');
+    selectTab(tabs[(i + 1) % tabs.length], false);
+  });
+  if (!tabsStopped && 'IntersectionObserver' in window) {
+    const stage = $('.shots-layout');
+    new IntersectionObserver(([e]) => {
+      if (!tabsStopped) tabList.classList.toggle('is-playing', e.isIntersecting);
+    }, { threshold: 0.45 }).observe(stage);
+    const hold = (on) => { if (!tabsStopped) tabList.classList.toggle('is-paused', on); };
+    stage.addEventListener('pointerenter', () => hold(true));
+    stage.addEventListener('pointerleave', () => hold(false));
+  }
 
   // ---------- Live data from GitHub ----------
   const fmtInt = new Intl.NumberFormat('en-US');

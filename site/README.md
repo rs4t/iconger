@@ -23,17 +23,13 @@ Then open http://localhost:8000 (opening `index.html` as a file breaks the icon 
 
 ## Screenshots
 
-`img/shots/` holds the app screenshots, 3:2, ideally 2240x1480 PNG (so they stay sharp on
-high-DPI screens). Until a screenshot exists, its tab shows a labelled placeholder.
+`img/shots/` holds the app screenshots as WebP, 1920x1270, cropped to the window.
 
 | File | Shows | Used in |
 |---|---|---|
-| `editor.png` | Icon editor with a new icon previewed | Hero, "Icon editor" tab |
-| `home.png` | Pinned apps page | "Pinned apps" tab |
-| `brand.png` | Editor with a Simple Icons logo and the Background controls | "Brand logos" tab |
-| `restore.png` | Restore page with a few backups | "Restore" tab |
-| `settings.png` | Settings page | "Settings" tab |
+| `editor.webp` | Icon editor with a new icon previewed | Hero, "Icon editor" tab, link previews |
+| `home.webp` | Pinned apps page | "Pinned apps" tab |
+| `restore.webp` | Restore page | "Restore" tab |
+| `settings.webp` | Settings page | "Settings" tab |
 
-To add one, replace the matching `<div class="shot placeholder">` in `index.html` with an
-`<img class="shot" src="img/shots/NAME.png" width="1120" height="740" loading="lazy" alt="..." data-caption="...">`
-(keep the caption, and `is-on` on the first one).
+The tabs advance by themselves while the section is in view (hover pauses, a click stops it).
