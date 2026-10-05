@@ -2,15 +2,20 @@
 # domain set in Settings > Pages; DNS: CNAME iconger -> rs4t.github.io in Cloudflare).
 # Runs when site/ changes on master, or by hand (Actions > pages > Run workflow).
 # One-time setup: Settings > Pages > Build and deployment > Source: "GitHub Actions".
-# Versions, changelog and download numbers are read live from the GitHub API by the
-# page itself, so a new release needs no redeploy.
+# Before every deploy scripts/render_site.py writes the release notes into the page as
+# plain HTML (so search engines see them). It also runs after each release is published.
+# Download and star counts are still read live from the GitHub API by the page itself.
 name: pages
 
 on:
   workflow_dispatch:
   push:
     branches: [master]
-    paths: ["site/**", ".github/workflows/pages.yml"]
+    paths: ["site/**", "scripts/render_site.py", ".github/workflows/pages.yml"]
+  workflow_run:
+    workflows: [release]
+    types: [completed]
+    branches: [master]
 
 permissions:
   contents: read
@@ -27,8 +32,14 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    # after a release run: only when it succeeded
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     steps:
       - uses: actions/checkout@v4
+      - name: Write the release notes into the page
+        run: python3 scripts/render_site.py
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

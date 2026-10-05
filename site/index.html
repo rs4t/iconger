@@ -3,16 +3,44 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Iconger: new icons for your Windows taskbar</title>
-  <meta name="description" content="Iconger changes the icons of the apps on your Windows 10 and 11 taskbar. About 20,000 ready-made icons, your own files, and every original backed up. Free and open source.">
+  <title>Iconger – Custom Windows Taskbar Icons</title>
+  <meta name="description" content="Change the icons on your Windows 10 and 11 taskbar. About 20,000 free icons, colour adjustments, and every original backed up. No installer.">
+  <link rel="canonical" href="https://iconger.egorz.com/">
   <meta name="theme-color" content="#110f14">
   <meta name="color-scheme" content="dark">
-  <meta property="og:title" content="Iconger: new icons for your taskbar">
-  <meta property="og:description" content="Change the icons of the apps on your Windows taskbar. Free and open source.">
   <meta property="og:type" content="website">
-  <meta property="og:image" content="https://iconger.egorz.com/img/shots/editor.webp">
+  <meta property="og:site_name" content="Iconger">
+  <meta property="og:title" content="Iconger – Custom Windows Taskbar Icons">
+  <meta property="og:description" content="Change the icons on your Windows 10 and 11 taskbar. About 20,000 free icons, colour adjustments, and every original backed up. No installer.">
   <meta property="og:url" content="https://iconger.egorz.com/">
-  <link rel="canonical" href="https://iconger.egorz.com/">
+  <meta property="og:image" content="https://iconger.egorz.com/img/og-image.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Iconger's icon editor changing Firefox's taskbar icon">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Iconger – Custom Windows Taskbar Icons">
+  <meta name="twitter:description" content="Change the icons on your Windows 10 and 11 taskbar. About 20,000 free icons, colour adjustments, and every original backed up. No installer.">
+  <meta name="twitter:image" content="https://iconger.egorz.com/img/og-image.jpg">
+  <meta name="twitter:image:alt" content="Iconger's icon editor changing Firefox's taskbar icon">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Iconger",
+    "description": "Changes the icons of the apps on your Windows taskbar, with about 20,000 ready-made icons, colour adjustments, and a backup of every original icon.",
+    "url": "https://iconger.egorz.com/",
+    "applicationCategory": "UtilitiesApplication",
+    "operatingSystem": "Windows 10, Windows 11",
+    "softwareVersion": "0.9.0",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+    "isAccessibleForFree": true,
+    "downloadUrl": "https://github.com/rs4t/iconger/releases/latest/download/iconger.exe",
+    "screenshot": "https://iconger.egorz.com/img/shots/editor.webp",
+    "image": "https://iconger.egorz.com/img/og-image.jpg",
+    "license": "https://opensource.org/licenses/MIT",
+    "author": { "@type": "Person", "name": "rs4t", "url": "https://github.com/rs4t" }
+  }
+  </script>
   <link rel="icon" href="img/iconger-256.png" type="image/png">
   <link rel="preconnect" href="https://api.github.com" crossorigin>
   <link rel="preload" href="fonts/Geist-Variable.woff2" as="font" type="font/woff2" crossorigin>
@@ -26,7 +54,7 @@
   <header class="nav" id="top">
     <div class="wrap nav-row">
       <a class="brand" href="#top" aria-label="Iconger, back to top">
-        <img src="img/iconger-256.png" width="28" height="28" alt="">
+        <img src="img/iconger-256.png" width="28" height="28" alt="Iconger logo">
         <span translate="no">Iconger</span>
       </a>
       <nav class="nav-links" aria-label="Sections">
@@ -54,16 +82,22 @@
     <!-- Hero -->
     <section class="hero wrap">
       <div class="hero-copy">
-        <h1 class="enter" style="--i:0">New icons for your taskbar.</h1>
+        <h1 class="enter" style="--i:0">Change your Windows taskbar icons.</h1>
         <p class="lead enter" style="--i:1">About 20,000 ready-made icons, or your own, for any app pinned to your taskbar. Free for Windows 10 and 11.</p>
-        <div class="hero-cta enter" style="--i:2">
+        <ul class="hero-points enter" style="--i:2">
+          <li><svg class="i i-sm" aria-hidden="true"><use href="icons.svg#i-tick-circle"/></svg>About 20,000 icons in 7 styles</li>
+          <li><svg class="i i-sm" aria-hidden="true"><use href="icons.svg#i-tick-circle"/></svg>Colour adjustments</li>
+          <li><svg class="i i-sm" aria-hidden="true"><use href="icons.svg#i-tick-circle"/></svg>Backup and restore</li>
+          <li><svg class="i i-sm" aria-hidden="true"><use href="icons.svg#i-tick-circle"/></svg>No installer</li>
+        </ul>
+        <div class="hero-cta enter" style="--i:3">
           <a class="btn btn-primary btn-lg" href="https://github.com/rs4t/iconger/releases/latest/download/iconger.exe" data-download>
             <svg class="i" aria-hidden="true"><use href="icons.svg#i-windows"/></svg>
             Download for Windows
           </a>
           <a class="btn btn-ghost btn-lg" href="https://github.com/rs4t/iconger">View source</a>
         </div>
-        <p class="release-meta enter" style="--i:3" data-release-meta>Single portable .exe, no installer</p>
+        <p class="release-meta enter" style="--i:4" data-release-meta>Single portable .exe, no installer</p>
       </div>
       <figure class="hero-shot shot-frame">
         <img src="img/shots/editor.webp" width="1920" height="1270" alt="Iconger's icon editor: Firefox's current icon next to the new one, colour sliders on the left and icons to choose from on the right." fetchpriority="high">
@@ -72,11 +106,11 @@
 
     <!-- Numbers -->
     <section class="stats wrap" aria-label="Iconger in numbers">
-      <div class="stat reveal" style="--i:0">
+      <div class="stat stat-live reveal" style="--i:0">
         <span class="stat-value" data-stat="downloads">&nbsp;</span>
         <span class="stat-label">downloads</span>
       </div>
-      <div class="stat reveal" style="--i:1">
+      <div class="stat stat-live reveal" style="--i:1">
         <span class="stat-value" data-stat="stars-num">&nbsp;</span>
         <span class="stat-label">stars on GitHub</span>
       </div>
@@ -121,8 +155,8 @@
       <h2 id="features-title" class="reveal">Everything an icon needs.</h2>
       <div class="bento">
         <article class="cell cell-adjust reveal" style="--i:0">
-          <div class="adjust-demo" aria-hidden="true">
-            <img class="adjust-img" loading="lazy" src="img/libraries/firefox-dashboard.svg" width="160" height="160" alt="">
+          <div class="adjust-demo">
+            <img class="adjust-img" loading="lazy" src="img/libraries/firefox-dashboard.svg" width="160" height="160" alt="Firefox icon showing the selected colour look">
           </div>
           <div class="cell-text">
             <h3>Adjust any icon</h3>
@@ -246,37 +280,37 @@
       </div>
       <ul class="libs">
         <li class="lib reveal" style="--i:0" data-lib="dashboard" data-brand="">
-          <span class="lib-icon"></span>
+          <span class="lib-icon" role="img" aria-label="Firefox icon from Dashboard Icons"><img class="is-on" data-app="firefox" style="--i:0" src="img/libraries/firefox-dashboard.svg" width="96" height="96" loading="lazy" decoding="async" alt="Firefox icon in the Dashboard Icons style"></span>
           <a href="https://github.com/homarr-labs/dashboard-icons">Dashboard Icons</a>
           <span class="lib-meta">Full-colour logos, Apache-2.0</span>
         </li>
         <li class="lib reveal" style="--i:1" data-lib="whitesur">
-          <span class="lib-icon"></span>
+          <span class="lib-icon" role="img" aria-label="Firefox icon from WhiteSur"><img class="is-on" data-app="firefox" style="--i:1" src="img/libraries/firefox-whitesur.svg" width="96" height="96" loading="lazy" decoding="async" alt="Firefox icon in the WhiteSur style"></span>
           <a href="https://github.com/vinceliuice/WhiteSur-icon-theme">WhiteSur</a>
           <span class="lib-meta">macOS-like, GPL-3.0</span>
         </li>
         <li class="lib reveal" style="--i:2" data-lib="fluent">
-          <span class="lib-icon"></span>
+          <span class="lib-icon" role="img" aria-label="Firefox icon from Fluent"><img class="is-on" data-app="firefox" style="--i:2" src="img/libraries/firefox-fluent.svg" width="96" height="96" loading="lazy" decoding="async" alt="Firefox icon in the Fluent style"></span>
           <a href="https://github.com/vinceliuice/Fluent-icon-theme">Fluent</a>
           <span class="lib-meta">Windows-like, GPL-3.0</span>
         </li>
         <li class="lib reveal" style="--i:3" data-lib="papirus">
-          <span class="lib-icon"></span>
+          <span class="lib-icon" role="img" aria-label="Firefox icon from Papirus"><img class="is-on" data-app="firefox" style="--i:3" src="img/libraries/firefox-papirus.svg" width="96" height="96" loading="lazy" decoding="async" alt="Firefox icon in the Papirus style"></span>
           <a href="https://github.com/PapirusDevelopmentTeam/papirus-icon-theme">Papirus</a>
           <span class="lib-meta">Flat, GPL-3.0</span>
         </li>
         <li class="lib reveal" style="--i:4" data-lib="tela">
-          <span class="lib-icon"></span>
+          <span class="lib-icon" role="img" aria-label="Firefox icon from Tela"><img class="is-on" data-app="firefox" style="--i:4" src="img/libraries/firefox-tela.svg" width="96" height="96" loading="lazy" decoding="async" alt="Firefox icon in the Tela style"></span>
           <a href="https://github.com/vinceliuice/Tela-icon-theme">Tela</a>
           <span class="lib-meta">Flat tiles, GPL-3.0</span>
         </li>
         <li class="lib reveal" style="--i:5" data-lib="candy">
-          <span class="lib-icon"></span>
+          <span class="lib-icon" role="img" aria-label="Firefox icon from Candy"><img class="is-on" data-app="firefox" style="--i:5" src="img/libraries/firefox-candy.svg" width="96" height="96" loading="lazy" decoding="async" alt="Firefox icon in the Candy style"></span>
           <a href="https://github.com/EliverLara/candy-icons">Candy</a>
           <span class="lib-meta">Neon gradients, GPL-3.0</span>
         </li>
         <li class="lib reveal" style="--i:6" data-lib="simple">
-          <span class="lib-icon"></span>
+          <span class="lib-icon" role="img" aria-label="Firefox icon from Simple Icons"><span class="tile is-on" data-app="firefox" style="--i:6;--tile:#FF7139"><span class="glyph" style="--glyph:url(img/libraries/firefox-simple.svg)"></span></span></span>
           <a href="https://github.com/simple-icons/simple-icons">Simple Icons</a>
           <span class="lib-meta">Brand tiles, CC0</span>
         </li>
@@ -310,16 +344,299 @@
     <!-- Changelog -->
     <section class="section wrap" id="changelog" aria-labelledby="changelog-title">
       <h2 id="changelog-title" class="reveal">What's new.</h2>
-      <div class="releases" data-releases aria-busy="true">
-        <div class="release-skeleton" aria-hidden="true">
-          <span class="sk sk-title"></span><span class="sk"></span><span class="sk"></span><span class="sk sk-short"></span>
-        </div>
-        <div class="release-skeleton compact" aria-hidden="true"><span class="sk sk-row"></span></div>
-        <div class="release-skeleton compact" aria-hidden="true"><span class="sk sk-row"></span></div>
+      <div class="releases" data-releases>
+<!-- releases:start -->
+        <details class="release" open>
+          <summary><span class="release-version" translate="no">v0.9.0</span><time class="release-date" datetime="2026-09-26T15:02:00Z">Sep 26, 2026</time><span class="release-latest">Latest</span><span class="release-summary">Back up your icons, move them to another PC, and give brand logos the background you want.</span></summary>
+          <div class="release-body">
+<p>Back up your icons, move them to another PC, and give brand logos the background you want.</p>
+<h3>New</h3>
+<ul>
+<li><strong>Export and import your setup.</strong> Settings has a new "Back up or move your setup" card. Export saves a <code>.iconger</code> file with every custom icon inside it, so it also works on another PC. Import matches each app by its shortcut, then its program, then its name, backs up the originals as usual, and tells you what was applied and what was skipped (and why).</li>
+<li><strong>Backgrounds for Simple Icons logos.</strong> When you pick a Simple Icons logo, the Adjust panel now has a Background section: a rounded square, a circle, or no background at all, in any colour (the brand colour, a swatch, or your own). With no background the colour goes to the logo itself, so a black logo can now be blue.</li>
+</ul>
+<h3>Improved</h3>
+<ul>
+<li>Icons from the icon themes are drawn much more faithfully. The old SVG renderer missed shading, gradients and embedded images in many theme icons (Fluent's Steam and Discord icons, for example); Iconger now uses a more complete renderer.</li>
+</ul>
+<p>Your backups and settings carry over.</p>
+          </div>
+        </details>
+        <details class="release reveal" style="--i:1">
+          <summary><span class="release-version" translate="no">v0.8.1</span><time class="release-date" datetime="2026-09-26T14:23:57Z">Sep 26, 2026</time><span class="release-summary">Custom icons for apps that aren't pinned now show on the taskbar.</span></summary>
+          <div class="release-body">
+<p>Custom icons for apps that aren't pinned now show on the taskbar.</p>
+<h3>Fixed (experimental feature)</h3>
+<ul>
+<li>In v0.8.0 the new icon of an app that isn't pinned only showed in Alt+Tab and the app's title bar, not on its taskbar button. The taskbar takes a button's icon from the app's identity rather than from its window, so Iconger now also gives the app's windows an identity of their own that carries your icon (the same thing Chrome does to show a different icon for each profile).</li>
+<li>Because of that, the app's taskbar button may move to a new spot when the icon is applied, and its jump list (the recent files you see on right-click) isn't shown while the custom icon is on. Restoring the icon puts both back.</li>
+<li>Tip: pin the button from the taskbar and the pin keeps your icon. It then behaves like any other pin, no background needed.</li>
+</ul>
+<p>Your backups and settings carry over.</p>
+          </div>
+        </details>
+        <details class="release reveal" style="--i:2">
+          <summary><span class="release-version" translate="no">v0.8.0</span><time class="release-date" datetime="2026-09-25T13:34:27Z">Sep 25, 2026</time><span class="release-summary">Custom icons for apps that aren't pinned (experimental), and a "What's new" screen.</span></summary>
+          <div class="release-body">
+<p>Custom icons for apps that aren't pinned (experimental), and a "What's new" screen.</p>
+<h3>New (experimental, off by default)</h3>
+<ul>
+<li><strong>Apps that aren't pinned can get a custom icon too.</strong> Apps that are open on your taskbar without being pinned now show up in Pinned apps under <strong>Running now</strong>. Pick one and Iconger offers to turn on the experimental feature.</li>
+<li>Iconger swaps the icon of the app's windows (taskbar button, title bar and Alt+Tab), and again every time you open the app. Nothing on disk changes.</li>
+<li>For that, Iconger keeps running in the background: closing its window hides it (you'll see it in Task Manager), and it starts with Windows. You can turn startup off, or quit Iconger completely, in <strong>Settings &gt; Apps that aren't pinned</strong>.</li>
+<li>Known limits: some apps may flash their own icon for a moment or not take the new one, and apps running as administrator can't be changed. Tell us what you find!</li>
+</ul>
+<h3>New</h3>
+<ul>
+<li><strong>What's new:</strong> after each update, Iconger shows what changed (this screen).</li>
+</ul>
+<p>Your backups and settings carry over.</p>
+          </div>
+        </details>
+        <details class="release reveal" style="--i:3">
+          <summary><span class="release-version" translate="no">v0.7.0</span><time class="release-date" datetime="2026-09-25T12:41:37Z">Sep 25, 2026</time><span class="release-summary">A custom title bar.</span></summary>
+          <div class="release-body">
+<p>A custom title bar.</p>
+<h3>New</h3>
+<ul>
+<li><strong>Iconger draws its own title bar.</strong> The plain Windows bar is gone: the logo sits at the top of the sidebar, and minimize, maximize and close are drawn to match the app (close turns red when you point at it).</li>
+<li>Everything a normal window does still works: drag it by the top strip, double-click to maximize, right-click for the window menu, resize from any edge, snap it to screen edges. On Windows 11, pointing at the maximize button shows the Snap Layouts picker as usual.</li>
+<li>On Windows 11 the thin window border matches the app's colours.</li>
+</ul>
+<p>Your backups and settings carry over.</p>
+          </div>
+        </details>
+        <details class="release reveal" style="--i:4">
+          <summary><span class="release-version" translate="no">v0.6.0</span><time class="release-date" datetime="2026-09-25T12:00:57Z">Sep 25, 2026</time><span class="release-summary">Iconger now moves: animations everywhere, plus a few fixes.</span></summary>
+          <div class="release-body">
+<p>Iconger now moves: animations everywhere, plus a few fixes.</p>
+<h3>New</h3>
+<ul>
+<li><strong>Animations throughout.</strong> Pages fade in and their parts rise in one after another. Open an app and the title, preview, icon choices and details appear in turn; pick an icon and the "New" preview pops in while the app hops in the taskbar preview; the colour sliders cascade in. Cards lift when you point at them, buttons sink when pressed, the sidebar highlight and the "This app / From a file" switch slide, thumbnails fade in as they download, dialogs scale up as they open, and applying an icon gives a small green flourish. If you've turned off "Animation effects" in Windows, Iconger stays still too.</li>
+<li><strong>Skip this version</strong> in the update dialog: Iconger won't pop up about that version again at startup (you can still update from Settings, and newer versions are offered as usual).</li>
+</ul>
+<h3>Changed</h3>
+<ul>
+<li>Settings: the "Icon not updating?" card (Restart Explorer) moved to the bottom. Icons apply instantly now, so it's a fallback, not the first thing you need.</li>
+</ul>
+<h3>Fixed</h3>
+<ul>
+<li>On PCs without the Segoe UI font, text could render with a broken fallback font. Iconger now falls back to Arial or Tahoma properly.</li>
+</ul>
+<p>Your backups and settings carry over.</p>
+          </div>
+        </details>
+        <details class="release reveal" hidden>
+          <summary><span class="release-version" translate="no">v0.5.0</span><time class="release-date" datetime="2026-09-25T11:24:26Z">Sep 25, 2026</time><span class="release-summary">A welcome screen, a Start menu entry, and automatic updates.</span></summary>
+          <div class="release-body">
+<p>A welcome screen, a Start menu entry, and automatic updates.</p>
+<h3>New</h3>
+<ul>
+<li><strong>Updates itself.</strong> When Iconger opens, it checks GitHub for a newer version. A small line at the bottom left of the sidebar shows what's happening, and if there's an update, Iconger shows what's new and asks before installing it. Say yes, and it downloads the new version, checks it isn't damaged (size and SHA-256), swaps it in and restarts. Turn it off, or check by hand, in <strong>Settings → Updates and Start menu</strong>.</li>
+<li><strong>Find it in Windows search.</strong> Iconger adds itself to the Start menu, so you can search "Iconger" and pin it like any other app. If you move <code>iconger.exe</code>, the shortcut follows it the next time you open Iconger. You can remove it in Settings.</li>
+<li><strong>Welcome screen.</strong> The first time you open Iconger, it explains the three steps and lets you choose the two options above. If you've used Iconger before, you won't see it.</li>
+</ul>
+<p>Your backups and settings carry over.</p>
+          </div>
+        </details>
+        <details class="release reveal" hidden>
+          <summary><span class="release-version" translate="no">v0.4.1</span><time class="release-date" datetime="2026-09-24T13:04:03Z">Sep 24, 2026</time><span class="release-summary">Fixes for applied icons and Restore.</span></summary>
+          <div class="release-body">
+<p>Fixes for applied icons and Restore.</p>
+<h3>Fixed</h3>
+<ul>
+<li>Icons picked from an <code>.exe</code> or <code>.dll</code> could go blank later: they pointed straight into that file, so deleting it, or an app update moving it (Discord, some Electron apps), broke the taskbar icon. Every icon you apply is now saved as its own <code>.ico</code> in <code>%LOCALAPPDATA%\Iconger\icons</code>.</li>
+<li><strong>Restore</strong> now puts back exactly what was there for shortcuts made by installers (icons stored as <code>%ProgramFiles%\...</code>). Before, it restored an expanded copy of the path.</li>
+<li>Setting an icon path that uses <code>%VARS%</code> could keep showing the old icon. Fixed.</li>
+<li>Store apps you re-pinned through Iconger can now be restored too: <strong>Restore</strong> gives the pin the app's own icon back.</li>
+<li>In icon library results, when two libraries have the same picture, the one listed first is kept (before, it depended on which download finished first).</li>
+<li>Command-line options now work in any order (<code>--adjust</code> before <code>--open</code> used to be ignored).</li>
+<li>Opening Iconger a second time right after the first now brings up its window instead of doing nothing.</li>
+</ul>
+<p>Your backups and settings carry over.</p>
+          </div>
+        </details>
+        <details class="release reveal" hidden>
+          <summary><span class="release-version" translate="no">v0.4.0</span><time class="release-date" datetime="2026-09-24T12:25:26Z">Sep 24, 2026</time><span class="release-summary">Store / packaged apps are now supported.</span></summary>
+          <div class="release-body">
+<p>Store / packaged apps are now supported.</p>
+<h3>New</h3>
+<ul>
+<li>Apps installed from the Microsoft Store or as packaged apps (for example <strong>Claude Desktop</strong>, Calculator, Settings) now appear in <strong>Pinned apps</strong> as "Store app". Before, they were missing because Windows pins them without a shortcut file.</li>
+<li>Icon libraries, <strong>Adjust</strong> and <strong>Customize current icon</strong> all work for them.</li>
+<li>A packaged app's own icon can't be changed, so <strong>Apply</strong> creates a shortcut with your icon that opens the same app, then shows two quick steps: unpin the original and pin the new one (Windows 11 doesn't allow programs to pin things themselves). After that it's a normal pin you can re-style any time without re-pinning.</li>
+</ul>
+<p>Your backups and settings carry over.</p>
+          </div>
+        </details>
+        <details class="release reveal" hidden>
+          <summary><span class="release-version" translate="no">v0.3.1</span><time class="release-date" datetime="2026-09-24T12:01:10Z">Sep 24, 2026</time><span class="release-summary">Bug fix: the app could crash while adjusting an icon.</span></summary>
+          <div class="release-body">
+<p>Bug fix: the app could crash while adjusting an icon.</p>
+<h3>Fixed</h3>
+<ul>
+<li>Dragging the Hue (or any Adjust) slider could crash the app. The preview was swapped out while the window was still drawing the old one; it now waits until the frame is finished. Clicking icons in the grid had the same hidden risk and is fixed too.</li>
+</ul>
+<h3>New</h3>
+<ul>
+<li><code>--icon current</code> on the command line does the same as <strong>Customize current icon</strong>:</li>
+</ul>
+<p><code>iconger.exe --open "File Explorer" --icon current --adjust "hue=120"</code></p>
+<p>Your backups and settings carry over.</p>
+          </div>
+        </details>
+        <details class="release reveal" hidden>
+          <summary><span class="release-version" translate="no">v0.3.0</span><time class="release-date" datetime="2026-09-24T11:44:10Z">Sep 24, 2026</time><span class="release-summary">Thousands of ready-made icons, and a colour editor.</span></summary>
+          <div class="release-body">
+<p>Thousands of ready-made icons, and a colour editor.</p>
+<h3>New: icon libraries</h3>
+<p>Every app now gets ready-made icons under <strong>This app → Icon libraries</strong>, searched by the app's name. There's also a search box for anything else ("notes", "music", ...).</p>
+<p>About 21,000 icons from seven free libraries, each in a different style:</p>
+<ul>
+<li><strong>Dashboard Icons</strong>: full-colour app logos</li>
+<li><strong>WhiteSur</strong>: macOS style</li>
+<li><strong>Fluent</strong>: Windows 11 style</li>
+<li><strong>Papirus</strong> and <strong>Tela</strong>: flat, rounded</li>
+<li><strong>Candy</strong>: neon gradients</li>
+<li><strong>Simple Icons</strong>: the brand logo on a coloured tile</li>
+</ul>
+<p>For example, Obsidian had no alternatives before and now gets 7 different ones. Only the icons you look at are downloaded, and they're cached. Settings has a switch to keep Iconger completely offline, plus a button to clear the download cache.</p>
+<h3>New: adjust any icon</h3>
+<p>After picking an icon, or with <strong>Customize current icon</strong>, you can change:</p>
+<ul>
+<li><strong>Hue</strong>, <strong>saturation</strong>, <strong>brightness</strong> and <strong>contrast</strong></li>
+<li><strong>Tint</strong> towards any colour (swatches or a colour picker)</li>
+<li>One-click looks: <strong>Mono</strong>, <strong>Vivid</strong>, <strong>Soft</strong>, <strong>Dark</strong>, <strong>Flip</strong></li>
+</ul>
+<p>Double-click a slider to reset it. The preview and the taskbar strip update live; Apply saves it as a sharp multi-size icon.</p>
+<h3>Also</h3>
+<ul>
+<li>Command line: <code>--adjust "hue=40,saturation=140"</code> (after <code>--open</code> and <code>--icon</code>).</li>
+<li>Fixed a broken example path in the README.</li>
+</ul>
+<p>Your backups and settings carry over.</p>
+          </div>
+        </details>
+        <details class="release reveal" hidden>
+          <summary><span class="release-version" translate="no">v0.2.3</span><time class="release-date" datetime="2026-09-24T11:16:31Z">Sep 24, 2026</time><span class="release-summary">Small update: a simpler icon picker.</span></summary>
+          <div class="release-body">
+<p>Small update: a simpler icon picker.</p>
+<h3>Changed</h3>
+<ul>
+<li>Removed the <strong>Windows icons</strong> tab. The picker now has two sources: <strong>This app</strong> (icons built into the program, e.g. Firefox ships about 15) and <strong>From a file</strong> (.png, .jpg, .ico, .exe, .dll, or drag and drop).</li>
+<li>Apps with no built-in alternatives open straight on <strong>From a file</strong>.</li>
+</ul>
+<h3>New</h3>
+<ul>
+<li>Command-line option to open the editor with an icon already previewed (nothing is applied until you press Apply):</li>
+</ul>
+<p><code>iconger.exe --open "Firefox" --icon "C:\icons\fox.png"</code> <code>iconger.exe --open "Firefox" --icon "C:\Program Files\Mozilla Firefox\firefox.exe,13"</code></p>
+<p>Your backups and settings carry over.</p>
+          </div>
+        </details>
+        <details class="release reveal" hidden>
+          <summary><span class="release-version" translate="no">v0.2.2</span><time class="release-date" datetime="2026-09-24T09:44:57Z">Sep 24, 2026</time><span class="release-summary">Small update: new icons apply instantly.</span></summary>
+          <div class="release-body">
+<p>Small update: new icons apply instantly.</p>
+<h3>Changed</h3>
+<ul>
+<li>Applying or restoring an icon updates the taskbar right away. There's no "changes pending, restart Explorer" step any more; the sidebar card and banner are gone.</li>
+<li><strong>Restart Explorer</strong> moved to <strong>Settings → Icon not updating?</strong> as a fallback if an icon ever gets stuck. It can still clear the icon cache.</li>
+<li>Messages now show the app's name ("Firefox") instead of the shortcut file name ("Firefox (2)").</li>
+</ul>
+<p>Your backups and settings carry over.</p>
+          </div>
+        </details>
+        <details class="release reveal" hidden>
+          <summary><span class="release-version" translate="no">v0.2.1</span><time class="release-date" datetime="2026-09-24T09:21:52Z">Sep 24, 2026</time><span class="release-summary">Iconger gets its own look.</span></summary>
+          <div class="release-body">
+<p>Iconger gets its own look.</p>
+<h3>Changed</h3>
+<ul>
+<li><strong>New logo:</strong> a grid of app tiles with one tangerine tile lifting out of its slot, which is what Iconger does: swap one icon.</li>
+<li><strong>New colour palette:</strong> warm dark greys with a tangerine accent, replacing the previous navy/blue theme.</li>
+<li>Buttons on the accent colour use dark text so they're easier to read; disabled buttons now look clearly inactive.</li>
+<li>New version numbering: <code>0.x.y</code> while in beta (minor = updates, patch = small fixes). Older releases were renamed to v0.1.0 and v0.2.0.</li>
+</ul>
+<p>No behaviour changes since v0.2.0. Your backups and settings carry over.</p>
+          </div>
+        </details>
+        <details class="release reveal" hidden>
+          <summary><span class="release-version" translate="no">v0.2.0</span><time class="release-date" datetime="2026-09-24T09:14:41Z">Sep 24, 2026</time><span class="release-summary">A full rewrite: a new UI, a much more reliable core, and the bugs from 1.0 fixed.</span></summary>
+          <div class="release-body">
+<p>A full rewrite: a new UI, a much more reliable core, and the bugs from 1.0 fixed.</p>
+<h3>New</h3>
+<ul>
+<li>New dark UI with a sidebar, app cards, toasts and keyboard shortcuts</li>
+<li>Icon editor with a before/after preview and a mock taskbar strip</li>
+<li>Three icon sources: the app's own built-in alternatives, Windows' icon libraries, or your own file (.png, .jpg, .ico, .exe, .dll), with drag and drop</li>
+<li>Images become a sharp multi-size .ico (16–256 px) stored in <code>%LOCALAPPDATA%\Iconger\icons</code></li>
+<li><strong>Restore page:</strong> the original icon is backed up before the first change, so you can restore one app or all of them</li>
+<li>Detects leftover shortcuts Windows leaves behind when you re-pin an app. Editing those did nothing before; now you can move them to the Recycle Bin.</li>
+<li>Make several changes, then restart Explorer once. Open folder windows come back.</li>
+</ul>
+<h3>Fixed</h3>
+<ul>
+<li>Pinned apps only appeared while they were running</li>
+<li>Apps with "Power" or "Network" in their name (PowerShell, PowerToys...) were hidden</li>
+<li>Icons in the list and preview could be invisible</li>
+<li>Converted PNGs were stored in %TEMP% and could vanish later; large PNGs made broken .ico files</li>
+<li>"Reset to Default" lost the shortcut's original icon</li>
+<li>Some installer-made shortcuts kept their old icon after a change</li>
+<li>Clearing the icon cache didn't work (the files were deleted while Explorer had them locked)</li>
+<li>Blurry on high-DPI screens; 100% CPU while minimized; handle leaks</li>
+</ul>
+<h3>Known limitations</h3>
+<ul>
+<li>Store/UWP apps pinned to the taskbar (Settings, Calculator...) aren't listed yet</li>
+<li>The taskbar only shows new icons after Explorer restarts (the app handles this for you)</li>
+</ul>
+          </div>
+        </details>
+        <details class="release reveal" hidden>
+          <summary><span class="release-version" translate="no">v0.1.0</span><time class="release-date" datetime="2026-08-31T13:03:26Z">Aug 31, 2026</time><span class="release-summary">Initial beta release of Iconger - Windows pinned taskbar icon changer.</span></summary>
+          <div class="release-body">
+<p>Initial beta release of Iconger - Windows pinned taskbar icon changer.</p>
+          </div>
+        </details>
+<!-- releases:end -->
       </div>
       <button type="button" class="btn btn-ghost btn-sm releases-more" data-releases-more hidden></button>
-      <p class="releases-error" data-releases-error hidden>Couldn't load the release notes from GitHub right now. <a href="https://github.com/rs4t/iconger/releases">See every release on GitHub</a>.</p>
+      <noscript><style>.releases .release[hidden] { display: block !important; }</style></noscript>
       <a class="text-link" href="https://github.com/rs4t/iconger/releases">All releases on GitHub <svg class="i i-sm" aria-hidden="true"><use href="icons.svg#i-arrow-right-01"/></svg></a>
+    </section>
+
+    <!-- Answers to common searches -->
+    <section class="section wrap answers" id="guide" aria-labelledby="guide-title">
+      <h2 id="guide-title" class="reveal">Quick answers.</h2>
+      <article class="answer-row reveal" aria-labelledby="q-change">
+        <h3 id="q-change">How to change taskbar icons in Windows 11</h3>
+        <div class="answer-body">
+          <ol>
+            <li>Download <code translate="no">iconger.exe</code> and open it. There's nothing to install.</li>
+            <li>On <strong>Pinned apps</strong>, click the app you want to change.</li>
+            <li>Pick an icon: one of about 20,000 from seven free icon libraries, one the app ships with, or your own <code translate="no">.png</code>, <code translate="no">.jpg</code>, <code translate="no">.ico</code>, <code translate="no">.exe</code> or <code translate="no">.dll</code>. Adjust its colours if you like.</li>
+            <li>Click <strong>Apply</strong>. The taskbar shows the new icon right away.</li>
+          </ol>
+          <p>Microsoft Store apps keep their icon inside the app package, so Iconger makes a shortcut with your icon and walks you through swapping the pin. Iconger works on both Windows 10 and Windows 11.</p>
+          <p>Without Iconger, you can right-click the app on the taskbar, right-click its name, open <strong>Properties</strong> and click <strong>Change Icon</strong>. Windows only lets you pick an <code translate="no">.ico</code> file or an icon inside an <code translate="no">.exe</code> or <code translate="no">.dll</code> (not a <code translate="no">.png</code> or <code translate="no">.jpg</code>), it doesn't work for Store apps, and the taskbar sometimes needs an Explorer restart before it updates.</p>
+        </div>
+      </article>
+      <article class="answer-row reveal" aria-labelledby="q-restore">
+        <h3 id="q-restore">How to restore the original icons</h3>
+        <div class="answer-body">
+          <p>Open Iconger and go to <strong>Restore</strong>. Every app you changed is listed there: click <strong>Restore</strong> next to one app, or <strong>Restore all</strong> to undo everything at once. Iconger saves each original icon exactly as it was before its first change, so you always get the real original back.</p>
+          <p>Planning to stop using Iconger? Restore first. Your custom icons are files in Iconger's folder (<code translate="no">%LOCALAPPDATA%\Iconger</code>), so deleting that folder without restoring leaves those shortcuts without their icon.</p>
+        </div>
+      </article>
+      <article class="answer-row reveal" aria-labelledby="q-safe">
+        <h3 id="q-safe">Is Iconger safe?</h3>
+        <div class="answer-body">
+          <p>Iconger is free and open source under the MIT license. All of its code is public on GitHub, and every release is built and tested there from that code.</p>
+          <p>It only changes the icon of your taskbar shortcuts, the same setting as a shortcut's <strong>Change Icon</strong> button, and never touches the apps' own files. It backs up every original icon first, needs no installer and no admin rights, and has no accounts, ads or tracking. It only goes online to download the icons you look at (from GitHub and the jsDelivr CDN) and to check GitHub for updates, and you can turn both off in Settings. An update is installed only after you say yes, and only if its size and SHA-256 checksum match.</p>
+          <p>One thing to know: Iconger isn't code-signed yet, so Windows SmartScreen may warn you the first time you open it. Click <strong>More info</strong>, then <strong>Run anyway</strong>.</p>
+        </div>
+      </article>
     </section>
 
     <!-- FAQ -->
@@ -364,7 +681,7 @@
 
     <!-- Closing CTA -->
     <section class="closing wrap" aria-labelledby="closing-title">
-      <img class="closing-logo reveal" loading="lazy" src="img/iconger-256.png" width="72" height="72" alt="">
+      <img class="closing-logo reveal" loading="lazy" src="img/iconger-256.png" width="72" height="72" alt="Iconger app icon">
       <h2 id="closing-title" class="reveal">Give your taskbar a new look.</h2>
       <a class="btn btn-primary btn-lg reveal" href="https://github.com/rs4t/iconger/releases/latest/download/iconger.exe" data-download>
         <svg class="i" aria-hidden="true"><use href="icons.svg#i-windows"/></svg>
@@ -376,7 +693,7 @@
   <footer class="footer">
     <div class="wrap footer-row">
       <a class="brand" href="#top" aria-label="Iconger, back to top">
-        <img src="img/iconger-256.png" width="24" height="24" alt="">
+        <img src="img/iconger-256.png" width="24" height="24" alt="Iconger logo">
         <span translate="no">Iconger</span>
       </a>
       <p>Made by <a href="https://github.com/rs4t">rs4t</a>. MIT license.</p>

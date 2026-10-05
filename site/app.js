@@ -118,9 +118,8 @@
   libs.forEach((li, index) => {
     const slot = $('.lib-icon', li);
     const lib = li.dataset.lib;
-    const libName = $('a', li).textContent;
-    slot.setAttribute('role', 'img');
     APPS.forEach((app, n) => {
+      if (slot.querySelector('[data-app="' + app + '"]')) return; // already in the HTML
       const src = 'img/libraries/' + app + '-' + lib + '.svg';
       let el;
       if (lib === 'simple') {
@@ -142,10 +141,8 @@
       }
       el.dataset.app = app;
       el.style.setProperty('--i', index);
-      if (n === 0) el.classList.add('is-on');
       slot.appendChild(el);
     });
-    slot.setAttribute('aria-label', APP_NAMES[APPS[0]] + ' icon from ' + libName);
   });
   const appButtons = $$('[data-app]').filter((el) => el.tagName === 'BUTTON');
   const showApp = (b) => {
@@ -308,102 +305,33 @@
     $$('[data-stat="downloads"], [data-stat="stars-num"]').forEach((el) => el.closest('.stat').remove());
   }
 
-  // ---------- Release notes (a small, safe subset of Markdown) ----------
-  function escapeHtml(s) {
-    return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  }
-  function inline(s) {
-    return escapeHtml(s)
-      .replace(/`([^`]+)`/g, '<code>$1</code>')
-      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-      .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2">$1</a>');
-  }
-  // The notes are written for the release page; drop the line about the download there.
-  function noteLines(body) {
-    return body.replace(/\r/g, '').split('\n').filter((l) => !/Download `?iconger\.exe`? below/i.test(l));
-  }
-  function renderNotes(body) {
-    let html = '';
-    let para = [];
-    let list = false;
-    const flush = () => {
-      if (para.length) { html += '<p>' + inline(para.join(' ')) + '</p>'; para = []; }
-    };
-    const closeList = () => { if (list) { html += '</ul>'; list = false; } };
-    for (const raw of noteLines(body)) {
-      const line = raw.trim();
-      let m;
-      if (!line) { flush(); closeList(); }
-      else if ((m = line.match(/^#{1,6}\s+(.*)$/))) { flush(); closeList(); html += '<h3>' + inline(m[1]) + '</h3>'; }
-      else if ((m = line.match(/^[-*]\s+(.*)$/))) { flush(); if (!list) { html += '<ul>'; list = true; } html += '<li>' + inline(m[1]) + '</li>'; }
-      else { closeList(); para.push(line); }
-    }
-    flush(); closeList();
-    return html;
-  }
-  function summaryOf(body) {
-    const first = noteLines(body).map((l) => l.trim()).find((l) => l && !l.startsWith('#'));
-    return first ? first.replace(/^[-*]\s+/, '').replace(/\*\*|`/g, '').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1') : '';
-  }
-
-  function showReleases(data) {
+  // ---------- Older versions ----------
+  // The whole changelog is plain HTML (built by scripts/render_site.py); versions after the
+  // newest few start hidden behind this button.
+  function wireOlderReleases() {
     const box = $('[data-releases]');
-    box.innerHTML = '';
-    const latestTag = (data.releases.find((r) => !r.pre) || {}).tag;
-    const SHOWN = 5;
-    data.releases.forEach((r, i) => {
-      const d = document.createElement('details');
-      d.className = 'release' + (i > 0 ? ' reveal' : '');
-      if (i >= SHOWN) d.hidden = true;
-      if (i === 0) d.open = true;
-      const date = r.date ? '<time class="release-date" datetime="' + escapeHtml(r.date) + '">' + fmtDate.format(new Date(r.date)) + '</time>' : '';
-      d.innerHTML =
-        '<summary><span class="release-version" translate="no">' + escapeHtml(r.tag) + '</span>' + date +
-        (r.tag === latestTag ? '<span class="release-latest">Latest</span>' : '') +
-        '<span class="release-summary">' + inline(summaryOf(r.body)) + '</span></summary>' +
-        '<div class="release-body">' + renderNotes(r.body) + '</div>';
-      box.appendChild(d);
-    });
-    box.setAttribute('aria-busy', 'false');
-    const hiddenCount = data.releases.length - SHOWN;
     const more = $('[data-releases-more]');
-    if (hiddenCount > 0) {
-      more.textContent = 'Show ' + hiddenCount + ' older version' + (hiddenCount === 1 ? '' : 's');
-      more.hidden = false;
-      more.addEventListener('click', () => {
-        const rows = $$('.release[hidden]', box);
-        rows.forEach((el, i) => {
-          el.classList.remove('is-in');
-          el.style.setProperty('--i', Math.min(i, 8));
-          el.hidden = false;
-        });
-        requestAnimationFrame(() => requestAnimationFrame(() => rows.forEach((el) => el.classList.add('is-in'))));
-        more.hidden = true;
-        if (rows[0]) $('summary', rows[0]).focus({ preventScroll: true });
-      }, { once: true });
-    }
-    // older rows fade in as a group, the list is already in view
-    requestAnimationFrame(() => $$('.release.reveal:not([hidden])', box).forEach((el, i) => {
-      el.style.setProperty('--i', Math.min(i, 6));
-      el.classList.add('is-in');
-    }));
+    const older = $$('.release[hidden]', box);
+    if (!older.length) return;
+    more.textContent = 'Show ' + older.length + ' older version' + (older.length === 1 ? '' : 's');
+    more.hidden = false;
+    more.addEventListener('click', () => {
+      older.forEach((el, i) => {
+        el.classList.remove('is-in');
+        el.style.setProperty('--i', Math.min(i, 8));
+        el.hidden = false;
+      });
+      requestAnimationFrame(() => requestAnimationFrame(() => older.forEach((el) => el.classList.add('is-in'))));
+      more.hidden = true;
+      $('summary', older[0]).focus({ preventScroll: true });
+    }, { once: true });
   }
-
-  function showReleasesError() {
-    const box = $('[data-releases]');
-    box.innerHTML = '';
-    box.setAttribute('aria-busy', 'false');
-    $('[data-releases-error]').hidden = false;
-  }
+  wireOlderReleases();
 
   loadGitHub()
     .then((data) => {
       if (!data.releases.length) throw new Error('no releases');
       showStats(data);
-      showReleases(data);
     })
-    .catch(() => {
-      hideLiveStats();
-      showReleasesError();
-    });
+    .catch(hideLiveStats);
 })();
